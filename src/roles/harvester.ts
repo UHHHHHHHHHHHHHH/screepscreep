@@ -25,9 +25,15 @@ export class HarvesterRole extends BaseRole {
   }
 
   private harvest(creep: Creep): void {
-    const sources = creep.room.find(FIND_SOURCES);
-    if (sources.length > 0 && creep.harvest(sources[0]) === ERR_NOT_IN_RANGE) {
-      creep.moveTo(sources[0]);
+    const sourceId = creep.memory.sourceId;
+    const source = sourceId ? Game.getObjectById(sourceId) : null;
+
+    if (!source) {
+      creep.say("❓ no source");
+      return;
+    }
+    if (creep.harvest(source) === ERR_NOT_IN_RANGE) {
+      creep.moveTo(source);
     }
   }
 }

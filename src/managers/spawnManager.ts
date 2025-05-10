@@ -2,11 +2,29 @@ import { Role } from "../types/roles";
 import { determineRoleDemand } from "../roles/roleDemand";
 import { getBodyForRole } from "../roles/roleBodies";
 
+function getAvailableHarvestTarget(room: Room): Id<Source> | null {
+  const sources = room.find(FIND_SOURCES);
+
+  // Count assigned harvesters
+  const sourceCounts: Record<Id<Source>, number> = {};
+  for (const source of sources) {
+    sourceCounts[source.id] = 0;
+  }
+
+  for (const creep of Object.values(Game.creeps)) {
+    if (creep.memory.role === 'harvester' && creep.memory.sourceId) {
+      sourceCounts[creep.memory.sourceId] = (sourceCounts[creep.memory.sourceId] || 0) + 1;
+    }
+  }
+
+  // Return the first source with < 2 harvesters
+  const target = sources.find(source => sourceCounts[source.id] < 2);
+  return target?.id || null;
+}
+
 export function manageSpawns(spawn: StructureSpawn): void {
   const room = spawn.room;
   const demand = determineRoleDemand(room);
-
-  console.log("demand:", JSON.stringify(demand));
 
   const harvestersAlive = Object.values(Game.creeps).filter(
     c => c.memory.role === 'harvester'
@@ -35,12 +53,32 @@ export function manageSpawns(spawn: StructureSpawn): void {
       const energy = spawn.room.energyAvailable;
       const body = getBodyForRole(role, energy);
       const name = `${role}_${Game.time}`;
-      const result = spawn.spawnCreep(body, name, {
-        memory: { role },
-      });
+      let result: ScreepsReturnCode;
 
+      if (role === 'harvester') {
+        const targetSourceId = getAvailableHarvestTarget(spawn.room);
+        if (!targetSourceId) {
+          console.log("❌ No available source for harvester");
+          continue; // skip this role
+        }
+      
+        result = spawn.spawnCreep(body, name, {
+          memory: { role, sourceId: targetSourceId },
+        });
+      
+        if (result === OK) {
+          console.log(`Spawning harvester: ${name} → source ${targetSourceId}`);
+        }
+      } else {
+        result = spawn.spawnCreep(body, name, {
+          memory: { role },
+        });
+      
+        if (result === OK) {
+          console.log(`Spawning ${role}: ${name}`);
+        }
+      }
       if (result === OK) {
-        console.log(`Spawning ${role}: ${name}`);
         break; // spawn only one per tick
       }
     }
