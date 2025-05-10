@@ -1,55 +1,43 @@
 import { Role } from "../types/roles";
+import { determineRoleDemand } from "../roles/roleDemand";
+import { roleBodies } from "../roles/roleBodies";
 
-type SpawnRequest = {
-  role: Role;
-  body: BodyPartConstant[];
-};
+export function manageSpawns(spawn: StructureSpawn): void {
+  const room = spawn.room;
+  const demand = determineRoleDemand(room);
 
-const roleLimits: Record<Role, number> = {
-  harvester: 2,
-  upgrader: 1,
-  builder: 1,
-};
-
-const roleBodies: Record<Role, BodyPartConstant[]> = {
-  harvester: [WORK, CARRY, MOVE, MOVE],
-  upgrader: [WORK, CARRY, MOVE, MOVE],
-  builder: [WORK, CARRY, MOVE, MOVE],
-};
-
-export function manageSpawns(spawn: StructureSpawn) {
   const harvestersAlive = Object.values(Game.creeps).filter(
     c => c.memory.role === 'harvester'
   ).length;
-  
-  // Emergency bootstrapping
+
+  // 🆘 Emergency bootstrapping logic
   if (harvestersAlive === 0 && spawn.store[RESOURCE_ENERGY] >= 200) {
-    const name = `harvester_${Game.time}`;
+    const name = `emergency_harvester_${Game.time}`;
     const result = spawn.spawnCreep([WORK, CARRY, MOVE], name, {
-      memory: { role: 'harvester' }
+      memory: { role: 'harvester' },
     });
-  
+
     if (result === OK) {
       console.log(`🆘 Emergency harvester spawned: ${name}`);
       return;
     }
   }
-  
-  for (const role in roleLimits) {
-    const roleName = role as Role;
-    const creepsWithRole = Object.values(Game.creeps).filter(
-        (c: Creep) => c.memory.role === roleName
-    );      
 
-    if (creepsWithRole.length < roleLimits[roleName]) {
-      const name = `${roleName}_${Game.time}`;
-      const result = spawn.spawnCreep(roleBodies[roleName], name, {
-        memory: { role: roleName },
+  for (const role of Object.keys(demand) as Role[]) {
+    const desired = demand[role];
+    const current = Object.values(Game.creeps).filter(
+      c => c.memory.role === role
+    ).length;
+
+    if (current < desired) {
+      const name = `${role}_${Game.time}`;
+      const result = spawn.spawnCreep(roleBodies[role], name, {
+        memory: { role },
       });
 
       if (result === OK) {
-        console.log(`Spawning ${roleName}: ${name}`);
-        break; // only spawn one per tick
+        console.log(`Spawning ${role}: ${name}`);
+        break; // spawn only one per tick
       }
     }
   }

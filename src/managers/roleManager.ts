@@ -1,34 +1,62 @@
-const ROLE_LOCK_DURATION = 100; // ticks to stay locked after switching
+import { determineRoleDemand } from "../roles/roleDemand";
+import { Role } from "../types/roles";
+import { roleBodies } from "../roles/roleBodies";
+
+const ROLE_LOCK_DURATION = 100; // Ticks to stay locked into a role after switching
+const ROLE_REEVALUATION_INTERVAL = 10; // Ticks between reassessment
+
+function hasCompatibleBody(creep: Creep, targetRole: Role): boolean {
+    const desiredParts = roleBodies[targetRole];
+    const creepParts = creep.body.map(p => p.type);
+  
+    // Check if creep has at least all unique parts from desired config
+    const required = new Set(desiredParts);
+    for (const part of required) {
+      if (!creepParts.includes(part)) return false;
+    }
+    return true;
+}
 
 export function updateRoles(): void {
-  if (Game.time % 10 !== 0) return; // Throttle to every 10 ticks
+  if (Game.time % ROLE_REEVALUATION_INTERVAL !== 0) return;
 
   for (const room of Object.values(Game.rooms)) {
-    const constructionSites = room.find(FIND_CONSTRUCTION_SITES);
-    const needsBuilders = constructionSites.length > 0;
+    const demand = determineRoleDemand(room);
 
-    const upgraders = Object.values(Game.creeps).filter(c =>
-      c.memory.role === 'upgrader' &&
-      (!c.memory.lockUntil || Game.time >= c.memory.lockUntil)
-    );
+    for (const role of Object.keys(demand) as Role[]) {
+      const desired = demand[role];
 
-    const builders = Object.values(Game.creeps).filter(c =>
-      c.memory.role === 'builder' &&
-      (!c.memory.lockUntil || Game.time >= c.memory.lockUntil)
-    );
+      const candidates = Object.values(Game.creeps).filter(c =>
+        c.memory.role !== role &&
+        (!c.memory.lockUntil || Game.time >= c.memory.lockUntil) &&
+        hasCompatibleBody(c, role)
+      );
 
-    if (needsBuilders && upgraders.length > 0) {
-      const creep = upgraders[0];
-      console.log(`🔁 ${creep.name}: upgrader → builder`);
-      creep.memory.role = 'builder';
-      creep.memory.lockUntil = Game.time + ROLE_LOCK_DURATION;
-    }
+      const currentRoleCounts: Record<Role, number> = {
+        harvester: 0,
+        upgrader: 0,
+        builder: 0,
+      };
 
-    if (!needsBuilders && builders.length > 0) {
-      const creep = builders[0];
-      console.log(`🔁 ${creep.name}: builder → upgrader`);
-      creep.memory.role = 'upgrader';
-      creep.memory.lockUntil = Game.time + ROLE_LOCK_DURATION;
+      for (const creep of Object.values(Game.creeps)) {
+        currentRoleCounts[creep.memory.role] =
+          (currentRoleCounts[creep.memory.role] || 0) + 1;
+      }
+
+      if (currentRoleCounts[role] >= desired) continue;
+
+      // Find a creep in another role to switch to the needed role
+      const reassigned = candidates.find(c => {
+        const otherCount = currentRoleCounts[c.memory.role];
+        return demand[c.memory.role] < otherCount;
+      });
+
+      if (reassigned) {
+        console.log(`🔁 ${reassigned.name}: ${reassigned.memory.role} → ${role}`);
+        reassigned.memory.role = role;
+        reassigned.memory.lockUntil = Game.time + ROLE_LOCK_DURATION;
+        break; // reassign one per tick
+      }
     }
   }
 }
