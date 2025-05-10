@@ -1,3 +1,8 @@
+const extensionOffsets = [
+    [ 0, -2], [ 1, -1], [ 2,  0], [ 1,  1],
+    [ 0,  2], [-1,  1], [-2,  0], [-1, -1],
+];
+
 export function manageConstruction(room: Room): void {
     const controller = room.controller;
     if (!controller || !controller.my || controller.level < 2) return;
@@ -18,22 +23,25 @@ export function manageConstruction(room: Room): void {
   
     const spawn = room.find(FIND_MY_SPAWNS)[0];
     if (!spawn) return;
-  
+
+    // Offsets for a simple ring around the spawn (1 tile gap)
+
     // Try placing up to X missing extensions near the spawn
     let placed = 0;
-    for (let dx = -3; dx <= 3; dx++) {
-      for (let dy = -3; dy <= 3; dy++) {
+    for (const [dx, dy] of extensionOffsets) {
         if (placed >= missing) return;
-  
+      
         const x = spawn.pos.x + dx;
         const y = spawn.pos.y + dy;
-  
-        if (room.lookForAt(LOOK_STRUCTURES, x, y).length > 0) continue;
-        if (room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length > 0) continue;
-        if (room.createConstructionSite(x, y, STRUCTURE_EXTENSION) === OK) {
-          placed++;
+      
+        const hereIsBlocked =
+          room.lookForAt(LOOK_STRUCTURES, x, y).length > 0 ||
+          room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length > 0;
+      
+        if (!hereIsBlocked) {
+          const result = room.createConstructionSite(x, y, STRUCTURE_EXTENSION);
+          if (result === OK) placed++;
         }
       }
-    }
   }
   
