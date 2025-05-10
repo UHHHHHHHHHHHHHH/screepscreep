@@ -7,12 +7,16 @@ import { UpgraderRole } from './roles/upgrader';
 import { BuilderRole } from './roles/builder';
 import { HarvesterRole } from './roles/harvester';
 import { manageRoles } from './managers/roleManager';
+import { MinerRole } from './roles/miner';
+import { HaulerRole } from './roles/hauler';
 
 const roleModules: Record<Role, BaseRole> = {
-    upgrader: new UpgraderRole(),
-    builder: new BuilderRole(),
     harvester: new HarvesterRole(),
-  };  
+    builder: new BuilderRole(),
+    upgrader: new UpgraderRole(),
+    miner: new MinerRole(),
+    hauler: new HaulerRole(),
+};
 
 export const loop = function () {
     // const start = Game.cpu.getUsed();

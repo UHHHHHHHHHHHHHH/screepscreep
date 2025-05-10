@@ -3,9 +3,11 @@ import { Role } from "../types/roles";
 type BodyRatio = Partial<Record<BodyPartConstant, number>>;
 
 export const baseRoleRatios: Record<Role, BodyRatio> = {
-  harvester: { work: 3, carry: 1, move: 1 },
-  builder: { work: 1, carry: 2, move: 2 },
-  upgrader: { work: 2, carry: 2, move: 1 },
+    harvester: { work: 3, carry: 1, move: 1 },
+    builder: { work: 1, carry: 2, move: 2 },
+    upgrader: { work: 2, carry: 2, move: 1 },
+    miner: { work: 5, move: 1 },
+    hauler: { carry: 6, move: 3 }
 };
 
 function generateBodyFromRatio(
