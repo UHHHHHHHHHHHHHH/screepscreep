@@ -17,7 +17,7 @@ function hasCompatibleBody(creep: Creep, targetRole: Role): boolean {
     return true;
 }
 
-export function updateRoles(): void {
+export function manageRoles(): void {
   if (Game.time % ROLE_REEVALUATION_INTERVAL !== 0) return;
 
   for (const room of Object.values(Game.rooms)) {
