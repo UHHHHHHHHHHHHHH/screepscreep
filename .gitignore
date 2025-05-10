@@ -1,0 +1,20 @@
+# Node dependencies
+node_modules/
+
+# Output build folder
+dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Optional: VSCode project files
+.vscode/
+
+# Optional: OS crap
+.DS_Store
+Thumbs.db
+
+# Screeps account config if you ever use screeps.json
+.screeps.json

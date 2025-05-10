@@ -1,0 +1,31 @@
+{
+  "name": "screepscreep",
+  "version": "1.0.0",
+  "description": "Code for my screeps",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "rollup -c",
+    "commit": "npm run build && git add . && git commit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/UHHHHHHHHHHHHHH/screepscreep.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/UHHHHHHHHHHHHHH/screepscreep/issues"
+  },
+  "homepage": "https://github.com/UHHHHHHHHHHHHHH/screepscreep#readme",
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.3",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@types/screeps": "^3.3.8",
+    "rollup": "^2.79.2",
+    "rollup-plugin-terser": "^7.0.2",
+    "rollup-plugin-typescript2": "^0.36.0",
+    "typescript": "^5.8.3"
+  }
+}
