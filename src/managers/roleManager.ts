@@ -56,7 +56,11 @@ export function updateRoles(): void {
         reassigned.memory.role = role;
         reassigned.memory.lockUntil = Game.time + ROLE_LOCK_DURATION;
         break; // reassign one per tick
-      }
+      } else {
+        console.log(`⚠️ No reassignable creeps found for role '${role}'`);
+        console.log(`  Needed: ${desired}, Current: ${currentRoleCounts[role]}`);
+        console.log(`  Candidates:`, candidates.map(c => `${c.name} (${c.memory.role})`));
+      }      
     }
   }
 }

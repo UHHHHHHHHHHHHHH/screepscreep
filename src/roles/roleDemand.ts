@@ -6,8 +6,21 @@ export function determineRoleDemand(room: Room): RoleDemand {
   const constructionSites = room.find(FIND_CONSTRUCTION_SITES).length;
   const sources = room.find(FIND_SOURCES);
 
-  // Simple assumption: 2 harvesters per source (safe early game max)
+  // Early game logic: up to 2 harvesters per source
   const idealHarvesters = sources.length * 2;
+
+  const harvestersAlive = Object.values(Game.creeps).filter(
+    c => c.memory.role === 'harvester' && c.room.name === room.name
+  ).length;
+
+  // If not enough harvesters, suppress other roles
+  if (harvestersAlive < idealHarvesters) {
+    return {
+      harvester: idealHarvesters,
+      builder: 0,
+      upgrader: 0,
+    };
+  }
 
   return {
     harvester: idealHarvesters,
