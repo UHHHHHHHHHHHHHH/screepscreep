@@ -18,6 +18,23 @@ const roleBodies: Record<Role, BodyPartConstant[]> = {
 };
 
 export function manageSpawns(spawn: StructureSpawn) {
+  const harvestersAlive = Object.values(Game.creeps).filter(
+    c => c.memory.role === 'harvester'
+  ).length;
+  
+  // Emergency bootstrapping
+  if (harvestersAlive === 0 && spawn.store[RESOURCE_ENERGY] >= 200) {
+    const name = `harvester_${Game.time}`;
+    const result = spawn.spawnCreep([WORK, CARRY, MOVE], name, {
+      memory: { role: 'harvester' }
+    });
+  
+    if (result === OK) {
+      console.log(`🆘 Emergency harvester spawned: ${name}`);
+      return;
+    }
+  }
+  
   for (const role in roleLimits) {
     const roleName = role as Role;
     const creepsWithRole = Object.values(Game.creeps).filter(

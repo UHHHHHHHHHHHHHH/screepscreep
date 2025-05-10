@@ -14,7 +14,7 @@ const roleModules: Record<Role, BaseRole> = {
   };  
 
 export const loop = function () {
-    const start = Game.cpu.getUsed();
+    // const start = Game.cpu.getUsed();
 
     cleanCreepMemory();
 
@@ -31,6 +31,6 @@ export const loop = function () {
         roleModules[role]?.run(creep);
     }
 
-    const end = Game.cpu.getUsed();
-    console.log(`⏱️ Tick CPU: ${(end - start).toFixed(2)}`);
+    // const end = Game.cpu.getUsed();
+    // console.log(`⏱️ Tick CPU: ${(end - start).toFixed(2)}`);
 };
