@@ -48,7 +48,7 @@ export function updateRoles(): void {
       // Find a creep in another role to switch to the needed role
       const reassigned = candidates.find(c => {
         const otherCount = currentRoleCounts[c.memory.role];
-        return demand[c.memory.role] < otherCount;
+        return otherCount > demand[c.memory.role];
       });
 
       if (reassigned) {
