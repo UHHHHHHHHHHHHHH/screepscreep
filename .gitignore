@@ -1,9 +1,6 @@
 # Node dependencies
 node_modules/
 
-# Output build folder
-dist/
-
 # Logs
 npm-debug.log*
 yarn-debug.log*
