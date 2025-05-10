@@ -1,12 +1,12 @@
 import { determineRoleDemand } from "../roles/roleDemand";
 import { Role } from "../types/roles";
-import { roleBodies } from "../roles/roleBodies";
+import { getBodyForRole } from "../roles/roleBodies";
 
 const ROLE_LOCK_DURATION = 100; // Ticks to stay locked into a role after switching
 const ROLE_REEVALUATION_INTERVAL = 10; // Ticks between reassessment
 
 function hasCompatibleBody(creep: Creep, targetRole: Role): boolean {
-    const desiredParts = roleBodies[targetRole];
+    const desiredParts = getBodyForRole(targetRole, creep.room.energyCapacityAvailable);
     const creepParts = creep.body.map(p => p.type);
   
     // Check if creep has at least all unique parts from desired config

@@ -1,6 +1,6 @@
 import { Role } from "../types/roles";
 import { determineRoleDemand } from "../roles/roleDemand";
-import { roleBodies } from "../roles/roleBodies";
+import { getBodyForRole } from "../roles/roleBodies";
 
 export function manageSpawns(spawn: StructureSpawn): void {
   const room = spawn.room;
@@ -32,8 +32,10 @@ export function manageSpawns(spawn: StructureSpawn): void {
     ).length;
 
     if (current < desired) {
+      const energy = spawn.room.energyAvailable;
+      const body = getBodyForRole(role, energy);
       const name = `${role}_${Game.time}`;
-      const result = spawn.spawnCreep(roleBodies[role], name, {
+      const result = spawn.spawnCreep(body, name, {
         memory: { role },
       });
 
