@@ -2,6 +2,7 @@ import { Role } from './types/roles';
 import { BaseRole } from './roles/base';
 import { cleanCreepMemory } from './managers/memoryManager';
 import { manageSpawns } from './managers/spawnManager';
+import { manageConstruction } from './managers/constructionManager';
 import { UpgraderRole } from './roles/upgrader';
 import { BuilderRole } from './roles/builder';
 import { HarvesterRole } from './roles/harvester';
@@ -19,6 +20,10 @@ export const loop = function () {
 
     const spawn = Object.values(Game.spawns)[0];
     if (spawn) manageSpawns(spawn);
+
+    for (const room of Object.values(Game.rooms)) {
+        manageConstruction(room);
+    }
 
     for (const name in Game.creeps) {
         const creep = Game.creeps[name];
