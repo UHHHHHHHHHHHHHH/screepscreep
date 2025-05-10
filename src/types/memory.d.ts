@@ -1,8 +1,8 @@
-// This file adds custom memory typings for Screeps
+import { Role } from "./roles";
 
 declare global {
     interface CreepMemory {
-      role: "harvester" | "upgrader"; // or any other roles you use
+      role: Role; // or any other roles you use
     }
   }
   
