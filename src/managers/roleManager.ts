@@ -50,8 +50,9 @@ export function updateRoles(): void {
         const currentCount = currentRoleCounts[c.memory.role];
         const neededForThatRole = demand[c.memory.role] ?? 0;
       
-        return currentCount > neededForThatRole;
-      });      
+        // ✅ Always allow reassignment if the current role has zero demand
+        return neededForThatRole === 0 || currentCount > neededForThatRole;
+      });
 
       if (reassigned) {
         console.log(`🔁 ${reassigned.name}: ${reassigned.memory.role} → ${role}`);
