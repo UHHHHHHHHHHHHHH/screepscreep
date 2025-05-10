@@ -33,10 +33,15 @@ export function determineRoleDemand(room: Room): RoleDemand {
                 upgrader: harvestersAlive >= idealHarvesters ? 1 : 0,
             };
         case 2:
+            const containers = room.find(FIND_STRUCTURES, {
+                filter: s => s.structureType === STRUCTURE_CONTAINER,
+            }) as StructureContainer[];
+
             return {
                 ...base,
                 harvester: idealHarvesters,
                 builder: harvestersAlive >= idealHarvesters && constructionSites > 0 ? 1 : 0,
+                hauler: containers.length >= 1 ? 1 : 0,
             };
         case 2.5:
             return {
