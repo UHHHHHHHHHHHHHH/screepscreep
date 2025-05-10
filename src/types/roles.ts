@@ -1,1 +1,1 @@
-export type Role = 'harvester' | 'upgrader';
+export type Role = 'harvester' | 'upgrader' | 'builder';

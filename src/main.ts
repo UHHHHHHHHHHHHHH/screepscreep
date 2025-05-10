@@ -1,13 +1,16 @@
 import { Role } from './types/roles';
+import { BaseRole } from './roles/base';
 import { cleanCreepMemory } from './managers/memoryManager';
 import { manageSpawns } from './managers/spawnManager';
-import { roleHarvester } from './roles/harvester';
-import { roleUpgrader } from './roles/upgrader';
+import { UpgraderRole } from './roles/upgrader';
+import { BuilderRole } from './roles/builder';
+import { HarvesterRole } from './roles/harvester';
 
-const roleModules: Record<Role, { run: (creep: Creep) => void }> = {
-    harvester: roleHarvester,
-    upgrader: roleUpgrader,
-};
+const roleModules: Record<Role, BaseRole> = {
+    upgrader: new UpgraderRole(),
+    builder: new BuilderRole(),
+    harvester: new HarvesterRole(),
+  };  
 
 export const loop = function () {
     const start = Game.cpu.getUsed();

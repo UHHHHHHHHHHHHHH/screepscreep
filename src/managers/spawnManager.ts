@@ -8,11 +8,13 @@ type SpawnRequest = {
 const roleLimits: Record<Role, number> = {
   harvester: 2,
   upgrader: 1,
+  builder: 1,
 };
 
 const roleBodies: Record<Role, BodyPartConstant[]> = {
   harvester: [WORK, CARRY, MOVE, MOVE],
   upgrader: [WORK, CARRY, MOVE, MOVE],
+  builder: [WORK, CARRY, MOVE, MOVE],
 };
 
 export function manageSpawns(spawn: StructureSpawn) {
