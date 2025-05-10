@@ -1,4 +1,4 @@
-import { Role } from "./types/roles";
+import { Role } from "../types/roles";
 
 type SpawnRequest = {
   role: Role;
