@@ -6,6 +6,7 @@ import { manageConstruction } from './managers/constructionManager';
 import { UpgraderRole } from './roles/upgrader';
 import { BuilderRole } from './roles/builder';
 import { HarvesterRole } from './roles/harvester';
+import { updateRoles } from './managers/roleManager';
 
 const roleModules: Record<Role, BaseRole> = {
     upgrader: new UpgraderRole(),
@@ -17,6 +18,8 @@ export const loop = function () {
     // const start = Game.cpu.getUsed();
 
     cleanCreepMemory();
+
+    updateRoles();
 
     const spawn = Object.values(Game.spawns)[0];
     if (spawn) manageSpawns(spawn);

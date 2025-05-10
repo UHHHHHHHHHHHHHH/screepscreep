@@ -6,7 +6,7 @@ export function manageSpawns(spawn: StructureSpawn): void {
   const room = spawn.room;
   const demand = determineRoleDemand(room);
 
-  console.log(`[demand]`, demand);
+  console.log("demand:", JSON.stringify(demand));
 
   const harvestersAlive = Object.values(Game.creeps).filter(
     c => c.memory.role === 'harvester'
