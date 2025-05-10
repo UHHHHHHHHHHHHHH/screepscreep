@@ -1,6 +1,6 @@
 import { Role } from "../types/roles";
 import { determineRoleDemand } from "../roles/roleDemand";
-import { getBodyForRole } from "../roles/roleBodies";
+import { getBodyForRole, getBodySignature } from "../roles/roleBodies";
 
 function getAvailableHarvestTarget(room: Room): Id<Source> | null {
   const sources = room.find(FIND_SOURCES);
@@ -52,7 +52,15 @@ export function manageSpawns(spawn: StructureSpawn): void {
     if (current < desired) {
       const energy = spawn.room.energyAvailable;
       const body = getBodyForRole(role, energy);
-      const name = `${role}_${Game.time}`;
+      const shortRoles: Record<Role, string> = {
+        harvester: 'h',
+        builder: 'b',
+        upgrader: 'u',
+      };
+      
+      const signature = getBodySignature(body);
+      const name = `${shortRoles[role] || role}_${signature}_${Game.time}`;
+
       let result: ScreepsReturnCode;
 
       if (role === 'harvester') {
