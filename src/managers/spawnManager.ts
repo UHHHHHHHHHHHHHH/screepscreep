@@ -1,6 +1,7 @@
 import { Role } from "../types/roles";
 import { determineRoleDemand } from "../roles/roleDemand";
 import { getBodyForRole, getBodySignature } from "../roles/roleBodies";
+import { getRoomPhase } from "./roomManager";
 
 export function getAvailableSourceId(
     room: Room,
@@ -56,15 +57,17 @@ export function manageSpawns(spawn: StructureSpawn): void {
     ).length;
 
     // 🆘 Emergency bootstrapping logic
-    if (harvestersAlive === 0 && spawn.store[RESOURCE_ENERGY] >= 200) {
-        const name = `emergency_harvester_${Game.time}`;
-        const result = spawn.spawnCreep([WORK, CARRY, MOVE], name, {
-            memory: { role: Role.Harvester },
-        });
+    if (getRoomPhase(room) === 1) {
+        if (harvestersAlive === 0 && spawn.store[RESOURCE_ENERGY] >= 200) {
+            const name = `emergency_harvester_${Game.time}`;
+            const result = spawn.spawnCreep([WORK, CARRY, MOVE], name, {
+                memory: { role: Role.Harvester },
+            });
 
-        if (result === OK) {
-            console.log(`🆘 Emergency harvester spawned: ${name}`);
-            return;
+            if (result === OK) {
+                console.log(`🆘 Emergency harvester spawned: ${name}`);
+                return;
+            }
         }
     }
 
