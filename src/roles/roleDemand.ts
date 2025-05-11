@@ -71,7 +71,8 @@ export function determineRoleDemand(room: Room): RoleDemand {
                 ...base,
                 miner: sources.length,
                 hauler: sources.length,
-                builder: harvestersAlive >= idealHarvesters && constructionSites > 0 ? 1 : 0,
+                builder: constructionSites > 0 ? 1 : 0,
+                upgrader: 1,
             };
         default:
             return {

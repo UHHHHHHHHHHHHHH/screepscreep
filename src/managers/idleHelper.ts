@@ -4,7 +4,7 @@ export function handleIdle(creep: Creep): void {
     // 1. Build if there are construction sites
     const sites = creep.room.find(FIND_CONSTRUCTION_SITES);
     if (sites.length > 0) {
-        if (creep.store[RESOURCE_ENERGY] === 0) {
+        if (creep.store.getFreeCapacity(RESOURCE_ENERGY) !== 0) {
             // Get energy from containers
             const containers = creep.room.find(FIND_STRUCTURES, {
                 filter: s =>
