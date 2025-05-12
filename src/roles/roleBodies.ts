@@ -17,16 +17,12 @@ export function getBodyForRole(role: Role, energy: number): BodyPartConstant[] {
 
   // if we can’t even afford one ratio-unit, do fallback logic
   if (energy < cfg.minEnergyForRatio || unitCost === 0) {
-    // if there’s a fallbackRole, we’ll let the spawner switch roles
-    if (cfg.fallbackRole) {
-      return [];  // signal “I can’t do ratio, let’s spawn fallbackRole instead”
-    }
-    // else use this role’s fallbackBody
+    // use this role’s fallbackBody
     return cfg.fallbackBody || [];
   }
 
   // ok, we can afford ratio: repeat as many times as capacity allows (capped at 50 parts)
-  const repeats = Math.floor(energy / unitCost);
+  const repeats = cfg.dontRepeatBody ? 1 : Math.floor(energy / unitCost);
   const maxRepeats = Math.min(repeats, Math.floor(50 / unitParts.length));
   const body: BodyPartConstant[] = [];
   for (let i = 0; i < maxRepeats * unitParts.length; i++) {

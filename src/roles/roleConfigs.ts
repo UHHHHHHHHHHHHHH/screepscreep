@@ -3,8 +3,8 @@ import { Role } from "../types/roles";
 export interface RoleConfig {
   ratio: Partial<Record<BodyPartConstant, number>>;
   minEnergyForRatio: number;       // if available < this, skip ratio
-  fallbackRole?: Role;             // e.g. for miners, fallbackRole = Role.Harvester
   fallbackBody?: BodyPartConstant[];
+  dontRepeatBody?: boolean;
 }
 
 export const roleConfigs: Record<Role, RoleConfig> = {
@@ -17,8 +17,8 @@ export const roleConfigs: Record<Role, RoleConfig> = {
   miner: {
     ratio: { work: 5, move: 1 },
     minEnergyForRatio: 550,        // 5*100 + 1*50
-    fallbackRole: Role.Harvester,  // if we can’t afford miner, spawn a harvester instead
     fallbackBody: [WORK, CARRY, MOVE],
+    dontRepeatBody: true
   },
   builder: {
     ratio: { work: 1, carry: 2, move: 2 },
