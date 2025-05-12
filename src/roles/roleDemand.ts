@@ -1,5 +1,6 @@
 import { Role } from "../types/roles";
 import { getRoomPhase } from "../managers/roomManager";
+import { countCreepsByRole } from "../managers/creepManager";
 
 export type RoleDemand = Record<Role, number>;
 
@@ -7,24 +8,13 @@ const allRoles = Object.values(Role) as Role[];
 
 export function isRoleDemandSatisfied(room: Room): boolean {
     const demand = determineRoleDemand(room);
-    const counts: Record<Role, number> = {
-        harvester: 0,
-        upgrader: 0,
-        builder: 0,
-        miner: 0,
-        hauler: 0,
-    };
+    const counts = countCreepsByRole(room);
 
-    for (const creep of Object.values(Game.creeps)) {
-        if (creep.room.name === room.name) {
-            counts[creep.memory.role] = (counts[creep.memory.role] || 0) + 1;
+    for (const role of allRoles) {
+        if (counts[role] < demand[role]) {
+            return false;
         }
     }
-
-    for (const role of Object.keys(demand) as Role[]) {
-        if (counts[role] < demand[role]) return false;
-    }
-
     return true;
 }
 
@@ -60,9 +50,6 @@ export function determineRoleDemand(room: Room): RoleDemand {
     const constructionSites = room.find(FIND_CONSTRUCTION_SITES).length;
     const sources = room.find(FIND_SOURCES);
     const idealHarvesters = sources.length * 2;
-    const harvestersAlive = Object.values(Game.creeps)
-        .filter(c => c.memory.role === Role.Harvester && c.room.name === room.name)
-        .length;
 
     // start from a zeroed record
     const base = zeroDemand();

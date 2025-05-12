@@ -11,9 +11,14 @@ declare global {
     interface RoomMemory {
       containerPositions?: {
         [sourceId: string]: { x: number, y: number };
-      }
+      };
+      spawnQueue?: SpawnRequest[];
+    }
+    interface SpawnRequest {
+      role: Role;
+      opts?: any;          // e.g. { sourceId, containerId, … }
+      timestamp: number;   // when it was enqueued (for debugging/prioritization)
     }
   }
-  
   export {};
   

@@ -17,7 +17,6 @@ export const roleConfigs: Record<Role, RoleConfig> = {
   miner: {
     ratio: { work: 5, move: 1 },
     minEnergyForRatio: 550,        // 5*100 + 1*50
-    fallbackBody: [WORK, CARRY, MOVE],
     dontRepeatBody: true
   },
   builder: {
@@ -33,6 +32,5 @@ export const roleConfigs: Record<Role, RoleConfig> = {
   hauler: {
     ratio: { carry: 6, move: 3 },
     minEnergyForRatio: 450,        // 6*50 + 3*50
-    fallbackBody: [CARRY, CARRY, MOVE, MOVE],
   },
 };
