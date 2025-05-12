@@ -77,6 +77,8 @@ export function placeContainersNearSources(room: Room): void {
         // skip if we’ve already queued/placed one
         if (room.memory.containerPositions[source.id]) continue;
 
+        console.log("no memory of this source having a container", source)
+
         // build & filter only truly free adjacencies
         const freeTiles = OFFSETS
             .map(([dx, dy]) => new RoomPosition(source.pos.x + dx, source.pos.y + dy, room.name))
