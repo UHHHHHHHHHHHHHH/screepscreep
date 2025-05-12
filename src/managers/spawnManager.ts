@@ -81,6 +81,8 @@ export function manageSpawns(spawn: StructureSpawn): void {
         console.log('demand:\n' + JSON.stringify(demand, null, 2));
     }
 
+    console.log("queue", JSON.stringify(queue))
+
     const req = queue[0];
     const role = req.role;
     const body = getBodyForRole(req.role, room.energyAvailable);
@@ -143,4 +145,5 @@ export function manageSpawns(spawn: StructureSpawn): void {
     if (result === OK) {
         queue.shift(); 
     }
+    console.log("queue", JSON.stringify(room.memory.spawnQueue))
 }
