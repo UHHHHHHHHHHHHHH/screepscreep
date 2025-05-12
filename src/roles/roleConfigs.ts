@@ -20,8 +20,8 @@ export const roleConfigs: Record<Role, RoleConfig> = {
     dontRepeatBody: true
   },
   builder: {
-    ratio: { work: 1, carry: 2, move: 2 },
-    minEnergyForRatio: 300,        // 1*100 + 2*50 + 2*50
+    ratio: { work: 2, carry: 2, move: 2 },
+    minEnergyForRatio: 400,        // 1*100 + 2*50 + 2*50
     fallbackBody: [WORK, CARRY, CARRY, MOVE, MOVE],
   },
   upgrader: {

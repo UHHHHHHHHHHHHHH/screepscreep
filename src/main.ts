@@ -9,6 +9,7 @@ import { HarvesterRole } from './roles/harvester';
 import { manageRoles } from './managers/roleManager';
 import { MinerRole } from './roles/miner';
 import { HaulerRole } from './roles/hauler';
+import { profile } from './utils/profiler';
 
 const roleModules: Record<Role, BaseRole> = {
     harvester: new HarvesterRole(),
@@ -18,7 +19,7 @@ const roleModules: Record<Role, BaseRole> = {
     hauler: new HaulerRole(),
 };
 
-export const loop = function () {
+export const loop = profile("main loop", function () {
     // const start = Game.cpu.getUsed();
 
     cleanCreepMemory();
@@ -40,4 +41,4 @@ export const loop = function () {
 
     // const end = Game.cpu.getUsed();
     // console.log(`⏱️ Tick CPU: ${(end - start).toFixed(2)}`);
-};
+});

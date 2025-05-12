@@ -78,7 +78,9 @@ export function enqueueSpawns(room: Room) {
     }
 
     // (Optionally) debug log the new queue length
-    console.log(`queue (${Game.time}):`, JSON.stringify(queue));
+    if (Game.time % 10 === 0) {
+        console.log(`queue (${Game.time}):`, JSON.stringify(queue));
+    }
 }
 
 export function manageSpawns(spawn: StructureSpawn): void {
