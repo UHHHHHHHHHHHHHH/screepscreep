@@ -11,19 +11,6 @@ export class HarvesterRole extends BaseRole {
     }
   }
 
-  private deliverEnergy(creep: Creep): void {
-    const targets = creep.room.find(FIND_STRUCTURES, {
-      filter: s =>
-        (s.structureType === STRUCTURE_SPAWN ||
-         s.structureType === STRUCTURE_EXTENSION) &&
-        s.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
-    });
-
-    if (targets.length > 0 && creep.transfer(targets[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-      creep.moveTo(targets[0]);
-    }
-  }
-
   private harvest(creep: Creep): void {
     const sourceId = creep.memory.sourceId;
     let source = sourceId ? Game.getObjectById(sourceId) : null;
