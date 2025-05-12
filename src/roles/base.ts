@@ -3,6 +3,16 @@ export abstract class BaseRole {
 
   protected collectEnergy(creep: Creep): void {
     // Normal: withdraw from spawn/extensions
+    const pile = creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
+      filter: r => r.resourceType === RESOURCE_ENERGY && r.amount > 50
+    });
+    if (pile) {
+      if (creep.pickup(pile) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(pile);
+      }
+      return;
+    }
+
     const storageTargets = creep.room.find(FIND_STRUCTURES, {
       filter: s =>
         (s.structureType === STRUCTURE_SPAWN ||
