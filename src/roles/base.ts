@@ -35,11 +35,11 @@ export abstract class BaseRole {
   }
 
   protected updateWorkingState(creep: Creep): void {
-    if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) {
-      creep.memory.working = false;
+    if (creep.memory.atCapacity && creep.store[RESOURCE_ENERGY] === 0) {
+      creep.memory.atCapacity = false;
     }
-    if (!creep.memory.working && creep.store.getFreeCapacity() === 0) {
-      creep.memory.working = true;
+    if (!creep.memory.atCapacity && creep.store.getFreeCapacity() === 0) {
+      creep.memory.atCapacity = true;
     }
   }
 

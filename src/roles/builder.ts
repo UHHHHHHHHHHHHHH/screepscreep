@@ -4,7 +4,7 @@ export class BuilderRole extends BaseRole {
   run(creep: Creep): void {
     this.updateWorkingState(creep);
 
-    if (creep.memory.working) {
+    if (creep.memory.atCapacity) {
       this.buildOrRepair(creep);
     } else {
       this.collectEnergy(creep);

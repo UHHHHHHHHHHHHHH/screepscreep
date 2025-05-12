@@ -5,7 +5,7 @@ export class HaulerRole extends BaseRole {
     run(creep: Creep): void {
         this.updateWorkingState(creep);
 
-        if (creep.memory.working) {
+        if (creep.memory.atCapacity) {
             const targets = creep.room.find(FIND_STRUCTURES, {
                 filter: s =>
                     (s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_EXTENSION) &&

@@ -131,10 +131,6 @@ export function manageSpawns(spawn: StructureSpawn): void {
         }
     } else if (role === Role.Hauler) {
         const targetContainerId = getAvailableContainerId(spawn.room);
-        if (!targetContainerId) {
-            console.log("❌ No available container for hauler");
-            return
-        }
 
         result = spawn.spawnCreep(body, name, {
             memory: { role, containerId: targetContainerId },

@@ -4,7 +4,7 @@ export class HarvesterRole extends BaseRole {
   run(creep: Creep): void {
     this.updateWorkingState(creep);
 
-    if (creep.memory.working) {
+    if (creep.memory.atCapacity) {
       this.deliverEnergy(creep);
     } else {
       this.harvest(creep);
