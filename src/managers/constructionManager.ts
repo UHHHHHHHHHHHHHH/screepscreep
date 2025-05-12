@@ -11,9 +11,9 @@ export function manageConstruction(room: Room): void {
     switch (phase) {
         case 2:
             buildExtensions(room);
+            placeContainersNearSources(room);
             break;
         case 2.5:
-            placeContainersNearSources(room);
             break;
     }
 }
