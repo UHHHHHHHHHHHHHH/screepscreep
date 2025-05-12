@@ -62,6 +62,7 @@ export function determineRoleDemand(room: Room): RoleDemand {
                 harvester: idealHarvesters,
                 upgrader: sourcesAreFilled(room) ? 1 : 0,
             };
+            break;
         case 2:
             const containers = room.find(FIND_STRUCTURES, {
                 filter: s => s.structureType === STRUCTURE_CONTAINER,
@@ -74,6 +75,7 @@ export function determineRoleDemand(room: Room): RoleDemand {
                 hauler: containers.length >= 1 ? 1 : 0,
                 miner: containers.length >= 1 ? 1 : 0
             };
+            break;
         case 2.5:
             demand = {
                 ...base,
@@ -82,6 +84,7 @@ export function determineRoleDemand(room: Room): RoleDemand {
                 builder: sourcesAreFilled(room) ? 1 : 0,
                 upgrader: sourcesAreFilled(room) && constructionSites > 0 ? 0 : 10,
             };
+            break;
         default:
             demand = {
                 ...base,
@@ -89,6 +92,7 @@ export function determineRoleDemand(room: Room): RoleDemand {
                 builder: constructionSites > 0 ? 1 : 0,
                 upgrader: constructionSites > 0 ? 0 : 1,
             };
+            break;
     }
 
     const overrides = room.memory.roleDemandOverrides || {};
