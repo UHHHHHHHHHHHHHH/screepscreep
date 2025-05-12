@@ -19,7 +19,10 @@ export function manageConstruction(room: Room): void {
             placeContainersNearSources(room);
             break;
         case 2.5:
-            planAndBuildRoads(room)
+            planAndBuildRoads(room);
+            break;
+        case 3:
+            buildExtensions(room);
             break;
     }
 }

@@ -18,9 +18,14 @@ export function getRoomPhase(room: Room): number {
     // Phase 2: still placing _either_ extensions _or_ containers
     if (extensionsCount < 5 || containersCount < sourcesCount) {
       return 2;
+    } else if (level < 3) {
+      return 2.5;
     }
-  
-    // Phase 2.5: you've got your 5 extensions _and_ one container per source
-    return 2.5;
+
+    if (level === 3) {
+      return 3;
+    }
+
+    return 3.5
   }
   
