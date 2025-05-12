@@ -2,7 +2,6 @@ export abstract class BaseRole {
   abstract run(creep: Creep): void;
 
   protected collectEnergy(creep: Creep): void {
-    // Normal: withdraw from spawn/extensions
     const pile = creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
       filter: r => r.resourceType === RESOURCE_ENERGY && r.amount > 50
     });
