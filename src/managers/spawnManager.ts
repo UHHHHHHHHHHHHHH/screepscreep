@@ -52,7 +52,9 @@ export function manageSpawns(spawn: StructureSpawn): void {
     const room = spawn.room;
     const demand = determineRoleDemand(room);
 
-    if (Game.time % 10 === 0) console.log(demand);
+    if (Game.time % 10 === 0) {
+        console.log('demand:\n' + JSON.stringify(demand, null, 2));
+    }
 
     for (const role of Object.keys(demand) as Role[]) {
         const desired = demand[role];
