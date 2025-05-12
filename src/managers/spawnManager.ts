@@ -52,24 +52,7 @@ export function manageSpawns(spawn: StructureSpawn): void {
     const room = spawn.room;
     const demand = determineRoleDemand(room);
 
-    const harvestersAlive = Object.values(Game.creeps).filter(
-        c => c.memory.role === Role.Harvester
-    ).length;
-
-    // 🆘 Emergency bootstrapping logic
-    if (getRoomPhase(room) === 1) {
-        if (harvestersAlive === 0 && spawn.store[RESOURCE_ENERGY] >= 200) {
-            const name = `emergency_harvester_${Game.time}`;
-            const result = spawn.spawnCreep([WORK, CARRY, MOVE], name, {
-                memory: { role: Role.Harvester },
-            });
-
-            if (result === OK) {
-                console.log(`🆘 Emergency harvester spawned: ${name}`);
-                return;
-            }
-        }
-    }
+    if (Game.time % 10 === 0) console.log(demand);
 
     for (const role of Object.keys(demand) as Role[]) {
         const desired = demand[role];

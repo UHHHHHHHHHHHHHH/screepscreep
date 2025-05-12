@@ -3,35 +3,36 @@ import { BaseRole } from "./base";
 export class MinerRole extends BaseRole {
   run(creep: Creep): void {
     const sourceId = creep.memory.sourceId;
-    const source = sourceId ? Game.getObjectById<Source>(sourceId) : null;
+    const positions = creep.room.memory.containerPositions;
 
-    if (!source) {
+    if (!sourceId) {
       creep.say("❓ no src");
       return;
     }
 
-    // 🔍 Find the container near the source
-    const container = creep.room.find(FIND_STRUCTURES, {
-      filter: (s): s is StructureContainer =>
-        s.structureType === STRUCTURE_CONTAINER &&
-        s.pos.isNearTo(source.pos),
-    })[0];
-
-    if (!container) {
-      creep.say("❌ no box");
+    if (!positions || !positions[sourceId]) {
+      creep.say("❌ no pos");
       return;
     }
 
-    // 🧭 Move onto the container tile
-    if (!creep.pos.isEqualTo(container.pos)) {
-      creep.moveTo(container, { visualizePathStyle: { stroke: "#ffaa00" } });
+    // grab the cached coords
+    const { x, y } = positions[sourceId];
+    const containerPos = new RoomPosition(x, y, creep.room.name);
+
+    // move onto the container tile
+    if (!creep.pos.isEqualTo(containerPos)) {
+      creep.moveTo(containerPos, { visualizePathStyle: { stroke: "#ffaa00" }} );
       return;
     }
 
-    // ⛏ Harvest once positioned
+    // once in place, harvest from the source
+    const source = Game.getObjectById<Source>(sourceId);
+    if (!source) {
+      creep.say("❓ src gone");
+      return;
+    }
+
     const result = creep.harvest(source);
-    if (result !== OK) {
-      creep.say("💀 fail");
-    }
+    if (result !== OK) creep.say("💀 fail");
   }
 }

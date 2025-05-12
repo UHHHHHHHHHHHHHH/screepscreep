@@ -28,6 +28,25 @@ export function isRoleDemandSatisfied(room: Room): boolean {
     return true;
 }
 
+function sourcesAreFilled(room: Room): boolean {
+    const sources = room.find(FIND_SOURCES);
+  
+    return sources.every(source => {
+      const inRoom = (c: Creep) => c.room.name === room.name;
+      const bySource = (c: Creep) => c.memory.sourceId === source.id;
+  
+      const miners = Object.values(Game.creeps)
+        .filter(c => inRoom(c) && c.memory.role === Role.Miner && bySource(c))
+        .length;
+      if (miners >= 1) return true;
+  
+      const harvesters = Object.values(Game.creeps)
+        .filter(c => inRoom(c) && c.memory.role === Role.Harvester && bySource(c))
+        .length;
+      return harvesters >= 2;
+    });
+  }
+
 // build a fresh zeroed demand record
 function zeroDemand(): RoleDemand {
     return allRoles.reduce((acc, role) => {
@@ -53,7 +72,7 @@ export function determineRoleDemand(room: Room): RoleDemand {
             return {
                 ...base,
                 harvester: idealHarvesters,
-                upgrader: harvestersAlive >= idealHarvesters ? 1 : 0,
+                upgrader: sourcesAreFilled(room) ? 1 : 0,
             };
         case 2:
             const containers = room.find(FIND_STRUCTURES, {
@@ -62,9 +81,10 @@ export function determineRoleDemand(room: Room): RoleDemand {
 
             return {
                 ...base,
-                harvester: idealHarvesters,
-                builder: harvestersAlive >= idealHarvesters && constructionSites > 0 ? 1 : 0,
+                harvester: containers.length >= 1 ? idealHarvesters / 2 : idealHarvesters,
+                builder: sourcesAreFilled(room) && constructionSites > 0 ? 1 : 0,
                 hauler: containers.length >= 1 ? 1 : 0,
+                miner: containers.length >= 1 ? 1: 0
             };
         case 2.5:
             return {
