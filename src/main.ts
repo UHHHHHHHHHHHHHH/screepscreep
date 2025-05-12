@@ -23,7 +23,7 @@ export const loop = function () {
 
     cleanCreepMemory();
 
-    manageRoles();
+    // manageRoles();
 
     const spawn = Object.values(Game.spawns)[0];
     if (spawn) manageSpawns(spawn);
