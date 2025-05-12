@@ -1,3 +1,4 @@
+import { planAndBuildRoads } from "./roadManager";
 import { getRoomPhase } from "./roomManager";
 
 const CONSTRUCTION_INTERVAL = 10;
@@ -18,6 +19,7 @@ export function manageConstruction(room: Room): void {
             placeContainersNearSources(room);
             break;
         case 2.5:
+            planAndBuildRoads(room)
             break;
     }
 }

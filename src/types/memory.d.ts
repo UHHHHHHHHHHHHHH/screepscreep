@@ -14,6 +14,7 @@ declare global {
       };
       spawnQueue?: SpawnRequest[];
       roleDemandOverrides?: Partial<Record<Role, number>>;
+      roadSitesPlanned?: { x: number; y: number }[];
     }
     interface SpawnRequest {
       role: Role;
