@@ -49,23 +49,36 @@ export function getAvailableContainerId(room: Room): Id<StructureContainer> | nu
     return available?.id || null;
 }
 
-function enqueueSpawns(room: Room) {
+export function enqueueSpawns(room: Room) {
     const demand = determineRoleDemand(room);
     const counts = countCreepsByRole(room);
-    room.memory.spawnQueue = room.memory.spawnQueue || [];
 
-    for (const role of Object.keys(demand) as Role[]) {
-        const need = demand[role] - (counts[role] || 0);
+    // ensure queue exists
+    if (!room.memory.spawnQueue) room.memory.spawnQueue = [];
+    const queue = room.memory.spawnQueue as { role: Role; timestamp: number; opts?: any }[];
+
+    // 1) build a tally of what's already queued
+    const queuedCounts = Object.values(Role).reduce((acc, r) => {
+        acc[r] = 0;
+        return acc;
+    }, {} as Record<Role, number>);
+    for (const req of queue) {
+        queuedCounts[req.role] = (queuedCounts[req.role] || 0) + 1;
+    }
+
+    // 2) only enqueue “extra” requests per role
+    for (const role of Object.values(Role) as Role[]) {
+        const have = counts[role] || 0;
+        const queued = queuedCounts[role] || 0;
+        const need = demand[role] - have - queued;
+
         for (let i = 0; i < need; i++) {
-            // only enqueue if we don’t already have that role+opts in queue
-            room.memory.spawnQueue.push({
-                role,
-                timestamp: Game.time,
-                // you can also include e.g. sourceId or containerId here:
-                // opts: { sourceId, containerId }
-            });
+            queue.push({ role, timestamp: Game.time });
         }
     }
+
+    // (Optionally) debug log the new queue length
+    console.log(`queue (${Game.time}):`, JSON.stringify(queue));
 }
 
 export function manageSpawns(spawn: StructureSpawn): void {
@@ -143,8 +156,7 @@ export function manageSpawns(spawn: StructureSpawn): void {
     }
 
     if (result === OK) {
-        queue.shift(); 
-        room.memory.spawnQueue = queue;
+        room.memory.spawnQueue = queue.slice(1);
     }
     console.log("queue", JSON.stringify(room.memory.spawnQueue))
 }
