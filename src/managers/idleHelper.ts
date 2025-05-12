@@ -1,6 +1,18 @@
 import { isRoleDemandSatisfied } from "../roles/roleDemand";
 
 export function handleIdle(creep: Creep): void {
+    if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+        const pile = creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
+            filter: r => r.resourceType === RESOURCE_ENERGY && r.amount > 50
+        });
+        if (pile) {
+            if (creep.pickup(pile) === ERR_NOT_IN_RANGE) {
+                creep.moveTo(pile);
+            }
+            return;
+        }
+    }
+
     // 1. Build if there are construction sites
     const sites = creep.room.find(FIND_CONSTRUCTION_SITES);
     if (sites.length > 0) {

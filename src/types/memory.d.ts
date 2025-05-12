@@ -6,7 +6,7 @@ declare global {
       working?: boolean;
       lockUntil?: number;
       sourceId?: Id<Source>;
-      containerId?: Id<StructureContainer>;
+      containerId?: Id<StructureContainer> | null;
     }
     interface RoomMemory {
       containerPositions?: {
