@@ -25,8 +25,8 @@ export const roleConfigs: Record<Role, RoleConfig> = {
     fallbackBody: [WORK, CARRY, CARRY, MOVE, MOVE],
   },
   upgrader: {
-    ratio: { work: 2, carry: 2, move: 1 },
-    minEnergyForRatio: 350,        // 2*100 + 2*50 + 1*50
+    ratio: { work: 2, carry: 2, move: 3 },
+    minEnergyForRatio: 450,        // 2*100 + 2*50 + 3*50
     fallbackBody: [WORK, CARRY, MOVE],
   },
   hauler: {
