@@ -65,49 +65,55 @@ const OFFSETS: [number, number][] = [
     [-1, 1], [0, 1], [1, 1],
 ];
 
-export function placeContainersNearSources(room: Room) {
-    // ensure our cache object exists
+export function placeContainersNearSources(room: Room): void {
+    const spawn = room.find(FIND_MY_SPAWNS)[0];
+    if (!spawn) return;
+
     if (!room.memory.containerPositions) {
         room.memory.containerPositions = {};
     }
 
-    const spawn = room.find(FIND_MY_SPAWNS)[0];
-    if (!spawn) return;
-
     for (const source of room.find(FIND_SOURCES)) {
-        // if we've already chosen & placed (or queued) a container here, skip
+        // skip if we’ve already queued/placed one
         if (room.memory.containerPositions[source.id]) continue;
 
-        // build all valid adj positions
-        const candidates: RoomPosition[] = OFFSETS.map(([dx, dy]) =>
-            new RoomPosition(source.pos.x + dx, source.pos.y + dy, room.name)
-        ).filter(pos => {
-            // terrain must not be wall
-            if (room.getTerrain().get(pos.x, pos.y) === TERRAIN_MASK_WALL) return false;
-            return true;
-        });
+        // build & filter only truly free adjacencies
+        const freeTiles = OFFSETS
+            .map(([dx, dy]) => new RoomPosition(source.pos.x + dx, source.pos.y + dy, room.name))
+            .filter(pos => {
+                // no walls
+                if (room.getTerrain().get(pos.x, pos.y) === TERRAIN_MASK_WALL) return false;
+                // no existing structures or pending sites
+                if (pos.lookFor(LOOK_STRUCTURES).length > 0) return false;
+                if (pos.lookFor(LOOK_CONSTRUCTION_SITES).length > 0) return false;
+                return true;
+            });
 
-        if (candidates.length === 0) continue;
-
-        // pick the one that is closest to spawn
-        let best = candidates[0];
-        let bestRange = spawn.pos.getRangeTo(best);
-
-        for (let i = 1; i < candidates.length; i++) {
-            const r = spawn.pos.getRangeTo(candidates[i]);
-            if (r < bestRange) {
-                bestRange = r;
-                best = candidates[i];
-            }
+        if (freeTiles.length === 0) {
+            // nowhere to put it (all spots blocked)
+            continue;
         }
 
-        // try to place the site once
-        const res = room.createConstructionSite(best.x, best.y, STRUCTURE_CONTAINER);
+        // pick the free tile closest to spawn
+        freeTiles.sort((a, b) =>
+            spawn.pos.getRangeTo(a) - spawn.pos.getRangeTo(b)
+        );
+
+        const target = freeTiles[0];
+        const res = room.createConstructionSite(
+            target.x,
+            target.y,
+            STRUCTURE_CONTAINER
+        );
+
         if (res === OK) {
-            // cache so we never try again
-            room.memory.containerPositions[source.id] = { x: best.x, y: best.y };
-            console.log(`✏️ queued container @ ${best.x},${best.y} for source ${source.id}`);
+            room.memory.containerPositions[source.id] = { x: target.x, y: target.y };
+            console.log(
+                `✏️ Placed container for source ${source.id} at (${target.x},${target.y})`
+            );
+        } else {
+            // If it still somehow fails, you can log or handle retry logic here
+            console.log(`❌ Failed to place container at (${target.x},${target.y}): ${res}`);
         }
-        // if it failed (blocked by something unexpected), we’ll try again next tick
     }
 }
