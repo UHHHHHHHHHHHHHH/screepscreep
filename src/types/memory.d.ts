@@ -8,6 +8,11 @@ declare global {
       sourceId?: Id<Source>;
       containerId?: Id<StructureContainer>;
     }
+    interface RoomMemory {
+      containerPositions?: {
+        [sourceId: string]: { x: number, y: number };
+      }
+    }
   }
   
   export {};

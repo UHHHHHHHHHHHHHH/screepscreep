@@ -1,11 +1,15 @@
 import { getRoomPhase } from "./roomManager";
 
+const CONSTRUCTION_INTERVAL = 10;
+
 const extensionOffsets = [
     [0, -2], [1, -1], [2, 0], [1, 1],
     [0, 2], [-1, 1], [-2, 0], [-1, -1],
 ];
 
 export function manageConstruction(room: Room): void {
+    if (Game.time % CONSTRUCTION_INTERVAL !== 0) return;
+
     const phase = getRoomPhase(room);
 
     switch (phase) {
@@ -55,46 +59,55 @@ function buildExtensions(room: Room): void {
     }
 }
 
-function placeContainersNearSources(room: Room): void {
-    const sources = room.find(FIND_SOURCES);
-    for (const source of sources) {
-        const hasContainer = room.find(FIND_STRUCTURES, {
-            filter: s =>
-                s.structureType === STRUCTURE_CONTAINER &&
-                s.pos.inRangeTo(source.pos, 1),
-        }).length > 0;
+const OFFSETS: [number, number][] = [
+    [-1, -1], [0, -1], [1, -1],
+    [-1, 0], [1, 0],
+    [-1, 1], [0, 1], [1, 1],
+];
 
-        const siteExists = room.find(FIND_CONSTRUCTION_SITES, {
-            filter: s =>
-                s.structureType === STRUCTURE_CONTAINER &&
-                s.pos.inRangeTo(source.pos, 1),
-        }).length > 0;
+export function placeContainersNearSources(room: Room) {
+    // ensure our cache object exists
+    if (!room.memory.containerPositions) {
+        room.memory.containerPositions = {};
+    }
 
-        if (hasContainer || siteExists) continue;
+    const spawn = room.find(FIND_MY_SPAWNS)[0];
+    if (!spawn) return;
 
-        const offsets = [
-            [-1, -1], [0, -1], [1, -1],
-            [-1, 0], [1, 0],
-            [-1, 1], [0, 1], [1, 1],
-        ];
+    for (const source of room.find(FIND_SOURCES)) {
+        // if we've already chosen & placed (or queued) a container here, skip
+        if (room.memory.containerPositions[source.id]) continue;
 
-        for (const [dx, dy] of offsets) {
-            const x = source.pos.x + dx;
-            const y = source.pos.y + dy;
-            const terrain = room.lookForAt(LOOK_TERRAIN, x, y)[0];
-            if (terrain === "wall") continue;
+        // build all valid adj positions
+        const candidates: RoomPosition[] = OFFSETS.map(([dx, dy]) =>
+            new RoomPosition(source.pos.x + dx, source.pos.y + dy, room.name)
+        ).filter(pos => {
+            // terrain must not be wall
+            if (room.getTerrain().get(pos.x, pos.y) === TERRAIN_MASK_WALL) return false;
+            return true;
+        });
 
-            const blocked =
-                room.lookForAt(LOOK_STRUCTURES, x, y).length > 0 ||
-                room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length > 0;
+        if (candidates.length === 0) continue;
 
-            if (!blocked) {
-                const result = room.createConstructionSite(x, y, STRUCTURE_CONTAINER);
-                if (result === OK) {
-                    console.log(`📦 Placed container near ${source.id} at (${x}, ${y})`);
-                }
-                break;
+        // pick the one that is closest to spawn
+        let best = candidates[0];
+        let bestRange = spawn.pos.getRangeTo(best);
+
+        for (let i = 1; i < candidates.length; i++) {
+            const r = spawn.pos.getRangeTo(candidates[i]);
+            if (r < bestRange) {
+                bestRange = r;
+                best = candidates[i];
             }
         }
+
+        // try to place the site once
+        const res = room.createConstructionSite(best.x, best.y, STRUCTURE_CONTAINER);
+        if (res === OK) {
+            // cache so we never try again
+            room.memory.containerPositions[source.id] = { x: best.x, y: best.y };
+            console.log(`✏️ queued container @ ${best.x},${best.y} for source ${source.id}`);
+        }
+        // if it failed (blocked by something unexpected), we’ll try again next tick
     }
 }
