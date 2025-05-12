@@ -144,6 +144,7 @@ export function manageSpawns(spawn: StructureSpawn): void {
 
     if (result === OK) {
         queue.shift(); 
+        room.memory.spawnQueue = queue;
     }
     console.log("queue", JSON.stringify(room.memory.spawnQueue))
 }
