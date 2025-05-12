@@ -79,7 +79,7 @@ export function determineRoleDemand(room: Room): RoleDemand {
                 miner: sources.length,
                 hauler: sources.length + 1,
                 builder: sourcesAreFilled(room) ? 1 : 0,
-                upgrader: sourcesAreFilled(room) && constructionSites > 0 ? 0 : 5,
+                upgrader: sourcesAreFilled(room) && constructionSites > 0 ? 0 : 10,
             };
         default:
             return {
