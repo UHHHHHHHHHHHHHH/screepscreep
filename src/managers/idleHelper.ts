@@ -1,4 +1,4 @@
-import { isRoleDemandSatisfied } from "../roles/roleDemand";
+import { isRoleDemandSatisfied } from "./roleDemandManager";
 
 export function handleIdle(creep: Creep): void {
     if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {

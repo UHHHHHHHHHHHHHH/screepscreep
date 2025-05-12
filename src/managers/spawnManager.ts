@@ -1,5 +1,5 @@
 import { Role } from "../types/roles";
-import { determineRoleDemand } from "../roles/roleDemand";
+import { determineRoleDemand } from "./roleDemandManager";
 import { getBodyForRole, getBodySignature } from "../roles/roleBodies";
 import { getRoomPhase } from "./roomManager";
 import { countCreepsByRole } from "./creepManager";

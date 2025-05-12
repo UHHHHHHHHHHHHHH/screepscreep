@@ -13,6 +13,7 @@ declare global {
         [sourceId: string]: { x: number, y: number };
       };
       spawnQueue?: SpawnRequest[];
+      roleDemandOverrides?: Partial<Record<Role, number>>;
     }
     interface SpawnRequest {
       role: Role;

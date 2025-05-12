@@ -1,4 +1,4 @@
-import { determineRoleDemand } from "../roles/roleDemand";
+import { determineRoleDemand } from "./roleDemandManager";
 import { Role } from "../types/roles";
 import { getBodyForRole } from "../roles/roleBodies";
 
