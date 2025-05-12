@@ -126,6 +126,8 @@ export function clearAllDemandOverrides(room: Room): void {
     console.log(`🗑️ [${room.name}] cleared all role-demand overrides`);
 }
 
-;(globalThis as any).setRoleDemandOverride    = setRoleDemandOverride;
-;(globalThis as any).clearRoleDemandOverride  = clearRoleDemandOverride;
-;(globalThis as any).clearAllDemandOverrides  = clearAllDemandOverrides;
+(Object.assign as any)(Game, {
+    setRoleDemandOverride,
+    clearRoleDemandOverride,
+    clearAllDemandOverrides,
+});
