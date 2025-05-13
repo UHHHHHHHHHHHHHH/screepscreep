@@ -10,7 +10,7 @@ import { manageRoles } from './managers/roleManager';
 import { MinerRole } from './roles/miner';
 import { HaulerRole } from './roles/hauler';
 import { profile } from './utils/profiler';
-import { getRoomResourceStats } from './managers/resourceManager';
+import { logRoomEnergyStats } from './managers/resourceManager';
 
 const roleModules: Record<Role, BaseRole> = {
     harvester: new HarvesterRole(),
@@ -34,14 +34,7 @@ export const loop = profile("main loop", function () {
         manageConstruction(room);
 
         if (Game.time % 10 === 0) {
-            const stats = getRoomResourceStats(room);
-    
-            console.log(`Room ${room.name} stats:
-            - Structures: ${stats.energyInStructures}
-            - Piles:      ${stats.energyInPiles}
-            - Transit:    ${stats.energyInTransit}
-            - Total:      ${stats.totalEnergy}
-            `);
+            logRoomEnergyStats(room)
         } 
     }
 
