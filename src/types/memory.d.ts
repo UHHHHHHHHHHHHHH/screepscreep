@@ -1,3 +1,4 @@
+import { RoomResourceStats } from "../managers/resourceManager";
 import { Role } from "./roles";
 
 declare global {
@@ -15,6 +16,7 @@ declare global {
       spawnQueue?: SpawnRequest[];
       roleDemandOverrides?: Partial<Record<Role, number>>;
       roadSitesPlanned?: { x: number; y: number }[];
+      resourceStats?: RoomResourceStats;
     }
     interface SpawnRequest {
       role: Role;
