@@ -31,5 +31,6 @@ export const roleConfigs: Record<Role, RoleConfig> = {
   hauler: {
     ratio: { carry: 6, move: 3 },
     minEnergyForRatio: 450,
+    fallbackBody: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE],
   },
 };

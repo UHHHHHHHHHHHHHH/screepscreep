@@ -1,6 +1,7 @@
 import { Role } from "../types/roles";
 import { getRoomPhase } from "./roomManager";
 import { countCreepsByRole } from "./creepManager";
+import { getRoomResourceStats } from "./resourceManager";
 
 export type RoleDemand = Record<Role, number>;
 
@@ -54,6 +55,11 @@ export function determineRoleDemand(room: Room): RoleDemand {
     // start from a zeroed record
     const base = zeroDemand();
 
+    const stats = getRoomResourceStats(room);
+    const totalEnergy = stats.totalEnergy;
+    const energyInPiles = stats.energyInPiles;
+    const availableEnergy = room.energyAvailable;
+
     let demand: RoleDemand;
     switch (phase) {
         case 1:
@@ -80,7 +86,7 @@ export function determineRoleDemand(room: Room): RoleDemand {
             demand = {
                 ...base,
                 miner: sources.length,
-                hauler: sources.length + 1,
+                hauler: sources.length,
                 builder: sourcesAreFilled(room) ? 2 : 0,
                 upgrader: sourcesAreFilled(room) && constructionSites > 0 ? 0 : 10,
             };
@@ -89,12 +95,21 @@ export function determineRoleDemand(room: Room): RoleDemand {
             demand = {
                 ...base,
                 miner: sources.length,
-                hauler: sources.length + 1,
+                hauler: sources.length,
                 builder: sourcesAreFilled(room) ? 2 : 0,
                 upgrader: sourcesAreFilled(room) && constructionSites > 0 ? 0 : 6,
             };
             break;
     }
+
+    if (energyInPiles > 1000) {
+        // Increase hauler demand if there's energy in piles
+        demand.hauler = Math.min(3, demand.hauler + 1)
+    }
+
+    
+
+
 
     const overrides = room.memory.roleDemandOverrides || {};
     for (const role of allRoles) {
