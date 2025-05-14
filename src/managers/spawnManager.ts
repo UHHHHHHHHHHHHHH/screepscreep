@@ -96,12 +96,26 @@ export function manageSpawns(spawn: StructureSpawn): void {
         console.log('demand:\n' + JSON.stringify(demand, null, 2));
     }
 
-    const req = queue[0];
-    const role = req.role;
-    const body = getBodyForRole(req.role, room.energyAvailable);
+    let selectedIndex = -1;
+    let selectedBody: BodyPartConstant[] = [];
+    let selectedReq: typeof queue[0] | null = null;
 
-    // If we can’t even afford the bare minimum, bail out and wait
-    if (body.length === 0) return;
+    for (let i = 0; i < queue.length; i++) {
+        const candidate = queue[i];
+        const body = getBodyForRole(candidate.role, room.energyAvailable);
+        if (body.length === 0) continue; // Can't afford, skip
+
+        selectedIndex = i;
+        selectedBody = body;
+        selectedReq = candidate;
+        break; // Found something affordable, stop scanning
+    }
+
+    // If nothing in the queue is affordable, just bail out and wait
+    if (!selectedReq) return;
+
+    const role = selectedReq.role;
+    const body = selectedBody;
 
     const shortRoles: Record<Role, string> = {
         harvester: 'hr',
