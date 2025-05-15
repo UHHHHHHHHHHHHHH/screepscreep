@@ -67,8 +67,8 @@ export function refreshSpawnQueue(room: Room) {
     }) as StructureContainer[];
 
     // --- Emergency: economy crashed ---
-    if ((noMiners || noHaulers) && containersWithEnergy.length === 0) {
-        console.log(`[${room.name}] 🚨 Emergency queue rebuild: only HARVESTER`);
+    if (noMiners && room.energyAvailable < 300) {
+        console.log(`[${room.name}] 🚨 Emergency queue rebuild: only HARVESTER (no miners, low room energy)`);
         newQueue.push({ role: Role.Harvester, timestamp: Game.time });
         room.memory.spawnQueue = newQueue;
         return;
@@ -106,7 +106,7 @@ export function refreshSpawnQueue(room: Room) {
 
     if (Game.time % 10 === 0) {
         console.log(`[${room.name}] ♻ Rebuilt queue: ${JSON.stringify(newQueue)}`);
-        console.log("demand", demand)
+        console.log("demand", JSON.stringify(demand))
     }
 }
 
