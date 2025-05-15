@@ -53,29 +53,32 @@ export function refreshSpawnQueue(room: Room) {
     const demand = determineRoleDemand(room);
     const counts = countCreepsByRole(room);
 
-    // Ensure queue exists
     if (!room.memory.spawnQueue) room.memory.spawnQueue = [];
 
-    const queue = room.memory.spawnQueue;
+    const newQueue: { role: Role; timestamp: number; opts?: any }[] = [];
 
-    // Build a fresh tally of existing queued per role
-    const queuedCounts = Object.values(Role).reduce((acc, r) => {
-        acc[r] = 0;
-        return acc;
-    }, {} as Record<Role, number>);
-    for (const req of queue) {
-        queuedCounts[req.role] = (queuedCounts[req.role] || 0) + 1;
+    const noMiners = counts[Role.Miner] === 0;
+    const noHaulers = counts[Role.Hauler] === 0;
+    const noHarvesters = counts[Role.Harvester] === 0;
+    const containersWithEnergy = room.find(FIND_STRUCTURES, {
+        filter: s =>
+            s.structureType === STRUCTURE_CONTAINER &&
+            s.store.getUsedCapacity(RESOURCE_ENERGY)! > 0,
+    }) as StructureContainer[];
+
+    // --- Emergency: economy crashed ---
+    if ((noMiners || noHaulers) && containersWithEnergy.length === 0) {
+        console.log(`[${room.name}] 🚨 Emergency queue rebuild: only HARVESTER`);
+        newQueue.push({ role: Role.Harvester, timestamp: Game.time });
+        room.memory.spawnQueue = newQueue;
+        return;
     }
 
-    // Calculate needed spawns and rebuild queue cleanly
-    const newQueue: typeof queue = [];
-
-    for (const role of Object.values(Role) as Role[]) {
+    // --- Stable: ensure MINERS and HAULERS first ---
+    for (const role of [Role.Miner, Role.Hauler]) {
         const existing = counts[role] || 0;
-        const queued = queuedCounts[role] || 0;
         const target = demand[role];
-
-        const missing = target - existing - queued;
+        const missing = target - existing;
         if (missing > 0) {
             for (let i = 0; i < missing; i++) {
                 newQueue.push({ role, timestamp: Game.time });
@@ -83,11 +86,27 @@ export function refreshSpawnQueue(room: Room) {
         }
     }
 
+    // --- Only allow UPGRADERS and BUILDERS if economy is healthy ---
+    if (containersWithEnergy.length > 0 || room.energyAvailable === room.energyCapacityAvailable) {
+        for (const role of [Role.Upgrader, Role.Builder]) {
+            const existing = counts[role] || 0;
+            const target = demand[role];
+            const missing = target - existing;
+            if (missing > 0) {
+                for (let i = 0; i < missing; i++) {
+                    newQueue.push({ role, timestamp: Game.time });
+                }
+            }
+        }
+    } else {
+        console.log(`[${room.name}] 🚫 Skipping upgraders/builders, economy not stable`);
+    }
+
     room.memory.spawnQueue = newQueue;
 
-    // Debug
     if (Game.time % 10 === 0) {
-        console.log(`[${room.name}] Updated spawnQueue: ${JSON.stringify(newQueue)}`);
+        console.log(`[${room.name}] ♻ Rebuilt queue: ${JSON.stringify(newQueue)}`);
+        console.log("demand", demand)
     }
 }
 
@@ -98,75 +117,11 @@ export function manageSpawns(spawn: StructureSpawn): void {
     const queue = room.memory.spawnQueue!;
     if (queue.length === 0) return;
 
-    const counts = countCreepsByRole(room);
+    const request = queue[0];
+    const body = getBodyForRole(request.role, room.energyAvailable);
+    if (body.length === 0) return; // Can't afford, wait
 
-    // Emergency mode: if no miners, haulers or harvesters → must spawn basic harvester ASAP
-    const noMiners = counts[Role.Miner] === 0;
-    const noHaulers = counts[Role.Hauler] === 0;
-    const noHarvesters = counts[Role.Harvester] === 0;
-
-    // Check if we have containers with energy stored
-    const containersWithEnergy = room.find(FIND_STRUCTURES, {
-        filter: s =>
-            s.structureType === STRUCTURE_CONTAINER &&
-            s.store.getUsedCapacity(RESOURCE_ENERGY)! > 0,
-    }) as StructureContainer[];
-
-    let selectedIndex = -1;
-    let selectedReq: typeof queue[0] | null = null;
-    let selectedBody: BodyPartConstant[] = [];
-
-    // --- Tier 1: Critical recovery ---
-    if ((noMiners && containersWithEnergy.length === 0) || (noHaulers && containersWithEnergy.length === 0) || (noHarvesters && room.energyAvailable < 300)) {
-        console.log(`[${room.name}] ⚠ Emergency spawn mode: Prioritizing harvester`);
-        const candidateIndex = queue.findIndex(q => q.role === Role.Harvester);
-        if (candidateIndex !== -1) {
-            const body = getBodyForRole(Role.Harvester, room.energyAvailable);
-            if (body.length > 0) {
-                selectedIndex = candidateIndex;
-                selectedReq = queue[candidateIndex];
-                selectedBody = body;
-            }
-        }
-    }
-
-    // --- Tier 2: Ensure economy stability (miners/haulers) ---
-    if (!selectedReq) {
-        const priorityRoles: Role[] = [Role.Miner, Role.Hauler];
-        for (const role of priorityRoles) {
-            const candidateIndex = queue.findIndex(q => q.role === role);
-            if (candidateIndex !== -1) {
-                const body = getBodyForRole(role, room.energyAvailable);
-                if (body.length > 0) {
-                    selectedIndex = candidateIndex;
-                    selectedReq = queue[candidateIndex];
-                    selectedBody = body;
-                    break;
-                }
-            }
-        }
-    }
-
-    // --- Tier 3: Everything else (upgraders, builders) ---
-    if (!selectedReq) {
-        const candidateIndex = queue.findIndex(q => q.role === Role.Upgrader || q.role === Role.Builder);
-        if (candidateIndex !== -1) {
-            const candidate = queue[candidateIndex];
-            const body = getBodyForRole(candidate.role, room.energyAvailable);
-            if (body.length > 0) {
-                selectedIndex = candidateIndex;
-                selectedReq = candidate;
-                selectedBody = body;
-            }
-        }
-    }
-
-    if (!selectedReq) return; // Can't afford anything still? wait.
-
-    // Proceed to spawn like before
-    const role = selectedReq.role;
-    const body = selectedBody;
-
+    const role = request.role;
     const shortRoles: Record<Role, string> = {
         harvester: 'hr',
         builder: 'b',
@@ -207,6 +162,6 @@ export function manageSpawns(spawn: StructureSpawn): void {
 
     if (result === OK) {
         console.log(`✅ Spawned ${role}: ${name}`);
-        queue.splice(selectedIndex, 1); // Remove the spawned request
+        queue.shift(); // Remove first entry since it was spawned
     }
 }
