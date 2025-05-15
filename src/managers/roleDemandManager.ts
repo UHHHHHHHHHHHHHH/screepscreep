@@ -107,10 +107,6 @@ export function determineRoleDemand(room: Room): RoleDemand {
         demand.hauler = Math.min(3, demand.hauler + 1)
     }
 
-    
-
-
-
     const overrides = room.memory.roleDemandOverrides || {};
     for (const role of allRoles) {
         if (overrides[role] != null) {

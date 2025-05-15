@@ -80,7 +80,21 @@ export function placeContainersNearSources(room: Room): void {
 
     for (const source of room.find(FIND_SOURCES)) {
         // skip if we’ve already queued/placed one
-        if (room.memory.containerPositions[source.id]) continue;
+        const memPos = room.memory.containerPositions[source.id];
+        if (memPos) {
+            const hasContainer = room.lookForAt(LOOK_STRUCTURES, memPos.x, memPos.y)
+                .some(s => s.structureType === STRUCTURE_CONTAINER);
+
+            const hasConstruction = room.lookForAt(LOOK_CONSTRUCTION_SITES, memPos.x, memPos.y)
+                .some(s => s.structureType === STRUCTURE_CONTAINER);
+
+            if (hasContainer || hasConstruction) {
+                continue; // ✅ Either a container exists OR one is being built, skip placing
+            } else {
+                delete room.memory.containerPositions[source.id];
+                console.log(`⚠️ Container for source ${source.id} missing, memory cleared`);
+            }
+        }
 
         console.log("no memory of this source having a container", source)
 

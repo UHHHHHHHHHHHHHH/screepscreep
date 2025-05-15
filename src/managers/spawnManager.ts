@@ -89,12 +89,12 @@ export function manageSpawns(spawn: StructureSpawn): void {
 
     const demand = determineRoleDemand(room);
 
-    const queue = room.memory.spawnQueue!;
-    if (queue.length === 0) return;
-
     if (Game.time % 10 === 0) {
         console.log('demand:\n' + JSON.stringify(demand, null, 2));
     }
+
+    const queue = room.memory.spawnQueue!;
+    if (queue.length === 0) return;
 
     let selectedIndex = -1;
     let selectedBody: BodyPartConstant[] = [];
