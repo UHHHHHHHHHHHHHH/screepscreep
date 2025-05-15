@@ -98,31 +98,72 @@ export function manageSpawns(spawn: StructureSpawn): void {
     const queue = room.memory.spawnQueue!;
     if (queue.length === 0) return;
 
-    // Role priority list, adjust as you want
-    const rolePriority: Role[] = [Role.Miner, Role.Hauler, Role.Harvester, Role.Upgrader, Role.Builder];
+    const counts = countCreepsByRole(room);
+
+    // Emergency mode: if no miners, haulers or harvesters → must spawn basic harvester ASAP
+    const noMiners = counts[Role.Miner] === 0;
+    const noHaulers = counts[Role.Hauler] === 0;
+    const noHarvesters = counts[Role.Harvester] === 0;
+
+    // Check if we have containers with energy stored
+    const containersWithEnergy = room.find(FIND_STRUCTURES, {
+        filter: s =>
+            s.structureType === STRUCTURE_CONTAINER &&
+            s.store.getUsedCapacity(RESOURCE_ENERGY)! > 0,
+    }) as StructureContainer[];
 
     let selectedIndex = -1;
     let selectedReq: typeof queue[0] | null = null;
     let selectedBody: BodyPartConstant[] = [];
 
-    // Loop roles by priority, then find first affordable matching request in queue
-    for (const priorityRole of rolePriority) {
-        const candidateIndex = queue.findIndex(q => q.role === priorityRole);
-        if (candidateIndex === -1) continue;
-
-        const candidate = queue[candidateIndex];
-        const body = getBodyForRole(candidate.role, room.energyAvailable);
-
-        if (body.length === 0) continue; // Can't afford, try next role
-
-        selectedIndex = candidateIndex;
-        selectedReq = candidate;
-        selectedBody = body;
-        break; // Found an affordable priority creep
+    // --- Tier 1: Critical recovery ---
+    if ((noMiners && containersWithEnergy.length === 0) || (noHaulers && containersWithEnergy.length === 0) || (noHarvesters && room.energyAvailable < 300)) {
+        console.log(`[${room.name}] ⚠ Emergency spawn mode: Prioritizing harvester`);
+        const candidateIndex = queue.findIndex(q => q.role === Role.Harvester);
+        if (candidateIndex !== -1) {
+            const body = getBodyForRole(Role.Harvester, room.energyAvailable);
+            if (body.length > 0) {
+                selectedIndex = candidateIndex;
+                selectedReq = queue[candidateIndex];
+                selectedBody = body;
+            }
+        }
     }
 
-    if (!selectedReq) return; // Nothing affordable, wait for more energy
+    // --- Tier 2: Ensure economy stability (miners/haulers) ---
+    if (!selectedReq) {
+        const priorityRoles: Role[] = [Role.Miner, Role.Hauler];
+        for (const role of priorityRoles) {
+            const candidateIndex = queue.findIndex(q => q.role === role);
+            if (candidateIndex !== -1) {
+                const body = getBodyForRole(role, room.energyAvailable);
+                if (body.length > 0) {
+                    selectedIndex = candidateIndex;
+                    selectedReq = queue[candidateIndex];
+                    selectedBody = body;
+                    break;
+                }
+            }
+        }
+    }
 
+    // --- Tier 3: Everything else (upgraders, builders) ---
+    if (!selectedReq) {
+        const candidateIndex = queue.findIndex(q => q.role === Role.Upgrader || q.role === Role.Builder);
+        if (candidateIndex !== -1) {
+            const candidate = queue[candidateIndex];
+            const body = getBodyForRole(candidate.role, room.energyAvailable);
+            if (body.length > 0) {
+                selectedIndex = candidateIndex;
+                selectedReq = candidate;
+                selectedBody = body;
+            }
+        }
+    }
+
+    if (!selectedReq) return; // Can't afford anything still? wait.
+
+    // Proceed to spawn like before
     const role = selectedReq.role;
     const body = selectedBody;
 
