@@ -67,7 +67,7 @@ export function refreshSpawnQueue(room: Room) {
     }) as StructureContainer[];
 
     // --- Emergency: economy crashed ---
-    if (noMiners && room.energyAvailable < 300) {
+    if (noMiners && room.energyAvailable <= 300) {
         console.log(`[${room.name}] 🚨 Emergency queue rebuild: only HARVESTER (no miners, low room energy)`);
         newQueue.push({ role: Role.Harvester, timestamp: Game.time });
         room.memory.spawnQueue = newQueue;
