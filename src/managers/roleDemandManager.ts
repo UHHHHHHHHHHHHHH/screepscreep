@@ -126,7 +126,7 @@ export function determineRoleDemand(room: Room): RoleDemand {
     const hasMiners = (currentCreepCounts[Role.Miner] || 0) > 0;
     const hasHarvesters = (currentCreepCounts[Role.Harvester] || 0) > 0;
     // Critically low energy: less than what a basic Harvester (WCM = 200) costs.
-    const isEnergyCriticallyLow = room.energyAvailable < (BODYPART_COST[WORK] + BODYPART_COST[CARRY] + BODYPART_COST[MOVE]);
+    const isEnergyCriticallyLow = room.energyAvailable < 550;
 
     if (sourceCount > 0 && !hasMiners && !hasHarvesters && isEnergyCriticallyLow) {
         console.log(`[${room.name}] EMERGENCY: No income generation and critically low energy (${room.energyAvailable}). Demanding 1 Harvester.`);
@@ -238,6 +238,10 @@ export function determineRoleDemand(room: Room): RoleDemand {
         if (overrides[role] !== undefined && overrides[role] !== null) { // Check for null as well as undefined
             demand[role] = overrides[role]!; // Non-null assertion due to the check
         }
+    }
+
+    if (Game.time % 10 === 0) {
+        console.log("Demand", JSON.stringify(demand))
     }
 
     return demand;
