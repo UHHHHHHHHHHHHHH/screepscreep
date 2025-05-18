@@ -1,3 +1,4 @@
+import { Role } from "../types/roles";
 /**
  * @fileoverview Defines the abstract base class for all creep roles.
  * It provides common functionalities like energy collection, delivery, and state management
@@ -19,50 +20,94 @@ export abstract class BaseRole {
      * Handles the logic for a creep to collect energy.
      * Prioritizes:
      * 1. Picking up dropped resources.
-     * 2. Withdrawing from spawns or extensions (if they have energy).
-     * 3. Harvesting from the closest source as a last resort.
+     * 2. Withdrawing from containers or storage if available (preferred energy sources).
+     * 3. Withdrawing from spawns or extensions ONLY if the room's spawn queue is empty.
+     * 4. Harvesting from the closest active source as a last resort.
      * @protected
      * @param {Creep} creep - The creep that needs to collect energy.
      * @returns {void}
      */
     protected collectEnergy(creep: Creep): void {
-        // Try to pick up dropped energy first
-        const pile = creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
-            filter: r => r.resourceType === RESOURCE_ENERGY && r.amount > 50 // Consider making '50' a constant
+        // 1. Try to pick up dropped energy first
+        const droppedEnergy = creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
+            filter: r => r.resourceType === RESOURCE_ENERGY && r.amount > Math.min(50, creep.store.getFreeCapacity(RESOURCE_ENERGY) / 2) // Only go for significant piles
         });
-        if (pile) {
-            if (creep.pickup(pile) === ERR_NOT_IN_RANGE) {
-                creep.moveTo(pile, { visualizePathStyle: { stroke: '#ffaa00' } }); // Added path visualization
+        if (droppedEnergy) {
+            if (creep.pickup(droppedEnergy) === ERR_NOT_IN_RANGE) {
+                creep.moveTo(droppedEnergy, { visualizePathStyle: { stroke: '#ffaa00' }, range: 1 });
             }
             return;
         }
 
-        // Then, try to withdraw from structures that can provide energy (spawns, extensions)
-        // Note: Containers and Storage are usually handled by specific roles (e.g., Hauler) or different logic.
-        const storageTargets = creep.room.find(FIND_STRUCTURES, {
-            filter: (s): s is StructureSpawn | StructureExtension => // Type guard for store access
-                (s.structureType === STRUCTURE_SPAWN ||
-                    s.structureType === STRUCTURE_EXTENSION) &&
-                s.store.getUsedCapacity(RESOURCE_ENERGY) > 0, // Check if they actually have energy
+        // 2. Try to withdraw from containers or storage (preferred storage)
+        const preferredStorageTargets = creep.room.find(FIND_STRUCTURES, {
+            filter: (s): s is StructureContainer | StructureStorage =>
+                (s.structureType === STRUCTURE_CONTAINER || s.structureType === STRUCTURE_STORAGE) &&
+                s.store.getUsedCapacity(RESOURCE_ENERGY) > (creep.memory.role === Role.Upgrader ? 100 : 50) // Ensure there's a decent amount
         });
 
-        if (storageTargets.length > 0) {
-            // Potentially sort by proximity or amount if multiple targets
-            const target = creep.pos.findClosestByPath(storageTargets);
+        if (preferredStorageTargets.length > 0) {
+            // Sort by amount, then by proximity for containers/storage
+            preferredStorageTargets.sort((a, b) => {
+                const energyA = a.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
+                const energyB = b.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
+                if (energyB !== energyA) {
+                    return energyB - energyA; // Prefer fuller targets
+                }
+                return creep.pos.getRangeTo(a) - creep.pos.getRangeTo(b); // Then closer
+            });
+            const target = preferredStorageTargets[0];
             if (target && creep.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-                creep.moveTo(target, { visualizePathStyle: { stroke: '#ffaa00' } });
+                creep.moveTo(target, { visualizePathStyle: { stroke: '#00ff00' }, range: 1 }); // Green for preferred
             }
             return;
         }
 
-        // Fallback: harvest from an available source directly
-        // This might be undesirable for some roles if dedicated miners/harvesters exist.
-        const sources = creep.room.find(FIND_SOURCES_ACTIVE); // Prefer active sources
-        if (sources.length > 0) {
-            const source = creep.pos.findClosestByPath(sources);
-            if (source && creep.harvest(source) === ERR_NOT_IN_RANGE) {
-                creep.moveTo(source, { visualizePathStyle: { stroke: '#ffaa00' } });
+
+        // 3. Conditionally withdraw from spawns or extensions
+        // Only if the spawn queue is empty (or doesn't exist)
+        const spawnQueue = creep.room.memory.spawnQueue;
+        const allowWithdrawFromSpawnStructures = !spawnQueue || spawnQueue.length === 0;
+
+        if (allowWithdrawFromSpawnStructures) {
+            const spawnExtensionTargets = creep.room.find(FIND_STRUCTURES, {
+                filter: (s): s is StructureSpawn | StructureExtension =>
+                    (s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_EXTENSION) &&
+                    s.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+            });
+
+            if (spawnExtensionTargets.length > 0) {
+                const target = creep.pos.findClosestByPath(spawnExtensionTargets);
+                if (target && creep.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                    creep.moveTo(target, { visualizePathStyle: { stroke: '#ffff00' }, range: 1 }); // Yellow for conditional
+                }
+                return;
             }
+        } else {
+            // If spawn queue is NOT empty, and this creep is an Upgrader, it might look for other sources.
+            // Other roles (like a Builder needing a quick top-up) might just wait or go idle.
+            if (creep.memory.role === Role.Upgrader && Game.time % 5 === 0) {
+                 creep.say("⏳Spawn busy");
+            }
+        }
+
+        // 4. Fallback: harvest from an available active source directly
+        // This is generally less efficient for roles like Upgrader if haulers/miners are established.
+        const activeSources = creep.room.find(FIND_SOURCES_ACTIVE);
+        if (activeSources.length > 0) {
+            // For Upgraders, only harvest directly if no containers/storage and spawn is busy or empty
+            if (creep.memory.role === Role.Upgrader && (preferredStorageTargets.length > 0 || !allowWithdrawFromSpawnStructures) && creep.room.energyAvailable > 0) {
+                // Upgrader has other potential sources (even if spawn busy) or room has general energy, don't rush to source
+                if (Game.time % 7 === 0) creep.say("🤔 Waiting");
+                return; // Let them wait a bit or idle logic take over if no other options.
+            }
+
+            const source = creep.pos.findClosestByPath(activeSources);
+            if (source && creep.harvest(source) === ERR_NOT_IN_RANGE) {
+                creep.moveTo(source, { visualizePathStyle: { stroke: '#ff0000' }, range: 1 }); // Red for last resort
+            }
+        } else {
+            if (Game.time % 10 === 0) creep.say("🚫 No Energy");
         }
     }
 
@@ -75,13 +120,13 @@ export abstract class BaseRole {
      * @returns {void}
      */
     protected updateWorkingState(creep: Creep): void {
-        if (creep.memory.atCapacity && creep.store[RESOURCE_ENERGY] === 0) {
+        if (creep.memory.atCapacity && creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
             creep.memory.atCapacity = false;
-            creep.say('🔄 harvest'); // Optional: visual feedback
+            // creep.say('🔄 collect'); // More generic term
         }
-        if (!creep.memory.atCapacity && creep.store.getFreeCapacity() === 0) {
+        if (!creep.memory.atCapacity && creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
             creep.memory.atCapacity = true;
-            creep.say('⚡ deliver'); // Optional: visual feedback
+            // creep.say('⚡ work'); // More generic term
         }
     }
 
@@ -95,23 +140,39 @@ export abstract class BaseRole {
      */
     protected deliverEnergy(creep: Creep): void {
         const targets = creep.room.find(FIND_STRUCTURES, {
-            filter: (s): s is StructureSpawn | StructureExtension => // Type guard for store access
+            filter: (s): s is StructureSpawn | StructureExtension | StructureTower => // Added Tower
                 (s.structureType === STRUCTURE_SPAWN ||
-                    s.structureType === STRUCTURE_EXTENSION) &&
+                 s.structureType === STRUCTURE_EXTENSION ||
+                 s.structureType === STRUCTURE_TOWER // Towers also need energy
+                ) &&
                 s.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
         });
 
         if (targets.length > 0) {
-            const target = creep.pos.findClosestByPath(targets); // Find closest pathable target
+            // Prioritize towers if they are low, then spawns/extensions
+            targets.sort((a, b) => {
+                if (a.structureType === STRUCTURE_TOWER && b.structureType !== STRUCTURE_TOWER) return -1;
+                if (b.structureType === STRUCTURE_TOWER && a.structureType !== STRUCTURE_TOWER) return 1;
+                if (a.structureType === STRUCTURE_TOWER && b.structureType === STRUCTURE_TOWER) {
+                    return (a.store.getUsedCapacity(RESOURCE_ENERGY) || 0) - (b.store.getUsedCapacity(RESOURCE_ENERGY) || 0); // Fill less full towers first
+                }
+                // For spawns/extensions, closest is fine.
+                return creep.pos.getRangeTo(a) - creep.pos.getRangeTo(b);
+            });
+
+            const target = targets[0]; // Take the highest priority target
             if (target && creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-                creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' } });
+                creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' }, range: 1 });
             }
         } else {
-            // Optional: if no spawns/extensions need energy, what should it do?
-            // Maybe drop near controller for upgraders, or fill a tower?
-            // For a generic harvester, this might mean idling or upgrading.
-            // Consider calling handleIdle(creep) or a similar fallback.
-            creep.say('🤷‍♂️ full?');
+            // If no primary targets (spawns, extensions, towers) need energy,
+            // an Upgrader might just idle near the controller or try to upgrade if it's already there.
+            // Other roles might look for repair tasks or go to an idle flag.
+            if (creep.memory.role !== Role.Upgrader) { // Upgraders handle their own "full and no target" by upgrading
+                creep.say('🤷‍♂️ full?');
+                 // Consider calling handleIdle(creep) for non-upgraders if they have energy but no delivery target
+                 // handleIdle(creep);
+            }
         }
     }
 }
