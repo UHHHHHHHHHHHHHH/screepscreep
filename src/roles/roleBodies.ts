@@ -1,57 +1,64 @@
 /**
  * @fileoverview Provides functions for determining creep body part compositions
- * based on role and available energy. It uses configurations from `roleConfigs.ts`
- * to dynamically generate creep bodies.
+ * based on role and the room's energy capacity. It uses configurations from
+ * `roleConfigs.ts` to dynamically generate the "target" body for a creep.
+ * This target body is then used by the spawn queue.
  * @module roles/roleBodies
  */
 
 import { Role } from "../types/roles";
-import { roleConfigs } from "./roleConfigs"; // Import RoleConfig for type clarity
+import { roleConfigs, RoleConfig } from "./roleConfigs"; // Assuming RoleConfig is exported from roleConfigs
 
-// Helper function to calculate the cost of a body or a unit of parts
-function calculateCost(parts: BodyPartConstant[]): number {
+/**
+ * Calculates the energy cost of an array of body parts.
+ * @param {BodyPartConstant[]} parts - The array of body parts.
+ * @returns {number} The total energy cost of the body parts.
+ */
+export function calculateCost(parts: BodyPartConstant[]): number {
+    if (!parts || parts.length === 0) return 0;
     return parts.reduce((sum, part) => sum + BODYPART_COST[part], 0);
 }
 
 /**
- * Generates a creep body array based on the specified role, available energy,
- * and configurations in `roleConfigs.ts`.
+ * Determines the "target" body for a given role based on the room's total energy capacity.
+ * This function decides the ideal composition of the creep if sufficient energy capacity is present,
+ * or a fallback body if not. It does NOT consider the room's *current available energy* for spawning,
+ * as that is handled by the spawn manager when deciding *if* it can spawn the queued request.
  *
- * The process is as follows:
- * 1. Retrieve the `RoleConfig` for the given role.
- * 2. If `energy` is less than `config.minEnergyForRatio` OR if the base `ratio` unit is too expensive
- *    (or costs 0), the `config.fallbackBody` is used. If no `fallbackBody` is defined, a
- *    minimal [WORK, CARRY, MOVE] body is returned, or an empty array if that's also too expensive.
+ * The logic flow:
+ * 1. Retrieves the `RoleConfig`. If none, returns a very basic body or empty if capacity is too low.
+ * 2. If `roomEnergyCapacity` is below `config.minEnergyForRatio` (or the base unit cost is 0),
+ *    it attempts to use `config.fallbackBody` if affordable with `roomEnergyCapacity`.
  * 3. If `config.dontRepeatBody` is true:
- *    The function attempts to build the exact body defined by `config.ratio`.
- *    `config.minEnergyForRatio` should ideally be the cost of this exact body.
- *    No parts beyond those in the `ratio` should be added.
- *    *Current Observation: Logic for strictly adhering to `dontRepeatBody` and not adding
- *    extra parts might need review.*
- * 4. If `config.dontRepeatBody` is false (or undefined):
- *    a. The `config.ratio` is treated as a repeating unit.
- *    b. Calculate how many full units can be afforded with the available `energy`.
- *    c. Construct the body with these full units, ensuring the total part count does not exceed 50.
- *    d. Attempt to use any leftover energy to add more individual parts, prioritizing
- *       them according to the order they appear in the `ratio` definition, again
- *       respecting the 50-part limit.
- * 5. The final body array is typically sorted for consistency (e.g., TOUGH, WORK, MOVE, CARRY).
+ *    - It tries to build the exact body specified by `config.ratio`.
+ *    - This body is only formed if `roomEnergyCapacity` can afford its total cost.
+ * 4. If `config.dontRepeatBody` is false:
+ *    - The `config.ratio` is treated as a repeating unit.
+ *    - It calculates how many full units can be built using the full `roomEnergyCapacity`.
+ *    - It then tries to add more parts with any "leftover" capacity from the `roomEnergyCapacity`,
+ *      respecting the 50-part limit.
+ * 5. If, after the above steps, no `targetBody` is formed (e.g., capacity too low for even the main ratio),
+ *    it re-evaluates using `config.fallbackBody` if it wasn't used already and is affordable.
+ * 6. As an absolute last resort for critical roles (Harvester, Miner), if `targetBody` is still empty,
+ *    it attempts to form a predefined minimal body if `roomEnergyCapacity` allows.
+ * 7. The final body is sorted for consistency.
  *
- * @param {Role} role - The role for which to generate the body.
- * @param {number} energy - The total energy available in the room for spawning.
- * @returns {BodyPartConstant[]} An array of body parts for the creep. Can be empty if
- *                               no valid body can be formed with the given energy.
+ * @param {Role} role - The role for which to determine the body.
+ * @param {number} roomEnergyCapacity - The `room.energyCapacityAvailable` for the room.
+ * @returns {BodyPartConstant[]} The determined target body parts. Returns an empty array
+ *                               if no suitable body (even minimal fallback) can be defined
+ *                               for the given `roomEnergyCapacity`.
  */
-export function getBodyForRole(role: Role, energy: number): BodyPartConstant[] {
+export function getBodyForRole(role: Role, roomEnergyCapacity: number): BodyPartConstant[] {
     const cfg = roleConfigs[role];
     if (!cfg) {
-        // Ultimate fallback if a role is not configured
-        console.log(`ERROR: No RoleConfig found for role: ${role}. Using default [W,C,M].`);
-        const defaultBody = [WORK, CARRY, MOVE];
-        return energy >= calculateCost(defaultBody) ? defaultBody : [];
+        console.log(`ERROR: No RoleConfig found for role: ${role}.`);
+        // Return a very basic body if no config, assuming minimal capacity
+        const defaultMinimalBody = [WORK, CARRY, MOVE];
+        return roomEnergyCapacity >= calculateCost(defaultMinimalBody) ? defaultMinimalBody : [];
     }
 
-    // Step 1: Create the "unit" of parts from the ratio for repeating, and its cost.
+    // Create the "unit" of parts from the ratio for repeating, and its cost.
     // Also, preserve the order of parts as defined in the ratio for adding leftovers.
     const unitParts: BodyPartConstant[] = [];
     const ratioOrder: BodyPartConstant[] = []; // Defines priority for adding leftover parts
@@ -67,82 +74,93 @@ export function getBodyForRole(role: Role, energy: number): BodyPartConstant[] {
     }
     const unitCost = calculateCost(unitParts);
 
-    // Step 2: Handle fallback scenarios
-    // If energy is too low for the ratio-based body, or if the unit itself is free/invalid.
-    if (energy < cfg.minEnergyForRatio || unitCost === 0) {
-        const fallback = cfg.fallbackBody || [];
-        if (fallback.length > 0 && energy >= calculateCost(fallback)) {
-            return fallback; // Use defined fallback if affordable
-        }
-        // If no fallback or fallback is too expensive, try a minimal body
-        let minimalBody = [WORK, CARRY, MOVE];
-        if (role === Role.Miner) minimalBody = [WORK, MOVE]; // Miner specific minimal
+    let targetBody: BodyPartConstant[] = [];
 
-        if (energy >= calculateCost(minimalBody)) {
-            return minimalBody;
+    // Scenario 1: Room capacity is too low for the main ratio logic OR unitCost is invalid
+    if (roomEnergyCapacity < cfg.minEnergyForRatio || unitCost === 0) {
+        if (cfg.fallbackBody && cfg.fallbackBody.length > 0 && roomEnergyCapacity >= calculateCost(cfg.fallbackBody)) {
+            targetBody = [...cfg.fallbackBody];
         }
-        return []; // Cannot afford even a minimal body
+        // If no suitable fallback, targetBody remains empty for now, will be handled by final minimal check
     }
+    // Scenario 2: Room capacity IS sufficient for main ratio logic
+    else {
+        if (cfg.dontRepeatBody) {
+            // For `dontRepeatBody`, 'unitParts' is the exact desired body.
+            // It should be affordable if roomEnergyCapacity >= unitCost (which implies >= minEnergyForRatio here).
+            if (roomEnergyCapacity >= unitCost && unitParts.length > 0 && unitParts.length <= 50) {
+                targetBody = [...unitParts];
+            }
+        } else {
+            // Handle repeatable body ratios, building up to roomEnergyCapacity
+            if (unitParts.length > 0) { // Ensure unit is valid
+                const numRepeatsPossibleWithCapacity = Math.floor(roomEnergyCapacity / unitCost);
+                const maxTotalPartsFromUnits = unitParts.length > 0 ? Math.floor(50 / unitParts.length) : 0;
+                const actualRepeats = Math.min(numRepeatsPossibleWithCapacity, maxTotalPartsFromUnits);
 
-    let body: BodyPartConstant[] = [];
-
-    // Step 3: Handle `dontRepeatBody` (fixed body definition)
-    if (cfg.dontRepeatBody) {
-        // The 'unitParts' here represents the complete, exact body.
-        // No repetition, no adding extra parts with leftover energy.
-        if (energy >= unitCost && unitParts.length <= 50) {
-            body = [...unitParts]; // Build the exact body defined by the ratio
-        }
-        // If energy is less than unitCost, it should have been caught by minEnergyForRatio check,
-        // but as a safeguard, an empty body will be returned if not affordable.
-    } else {
-        // Step 4: Handle repeatable body ratios
-        // Calculate how many full "units" can be afforded.
-        const numRepeats = Math.floor(energy / unitCost);
-        // Ensure total parts do not exceed 50.
-        const maxPossibleUnits = unitParts.length > 0 ? Math.floor(50 / unitParts.length) : 0;
-        const actualRepeats = Math.min(numRepeats, maxPossibleUnits);
-
-        for (let i = 0; i < actualRepeats; i++) {
-            body.push(...unitParts);
-        }
-
-        // Try to use leftover energy to add more individual parts, following ratioOrder.
-        let leftoverEnergy = energy - (actualRepeats * unitCost);
-        if (body.length < 50) { // Only add if there's room in the body
-            let addedMorePartsThisIteration: boolean;
-            do {
-                addedMorePartsThisIteration = false;
-                for (const part of ratioOrder) {
-                    const partCost = BODYPART_COST[part];
-                    if (leftoverEnergy >= partCost && body.length < 50) {
-                        body.push(part);
-                        leftoverEnergy -= partCost;
-                        addedMorePartsThisIteration = true;
+                if (actualRepeats > 0) {
+                    for (let i = 0; i < actualRepeats; i++) {
+                        targetBody.push(...unitParts);
                     }
-                    if (body.length >= 50) break; // Stop if body is full
                 }
-            } while (addedMorePartsThisIteration && body.length < 50);
+
+                // Try to use "leftover" room capacity to add more individual parts
+                let currentBodyCost = calculateCost(targetBody);
+                let remainingCapacityForAddons = roomEnergyCapacity - currentBodyCost;
+
+                if (targetBody.length < 50 && remainingCapacityForAddons > 0) {
+                    let addedMorePartsThisIteration: boolean;
+                    do {
+                        addedMorePartsThisIteration = false;
+                        for (const part of ratioOrder) { // Add parts according to the defined ratio priorities
+                            const partCost = BODYPART_COST[part];
+                            if (remainingCapacityForAddons >= partCost && targetBody.length < 50) {
+                                targetBody.push(part);
+                                remainingCapacityForAddons -= partCost;
+                                addedMorePartsThisIteration = true;
+                            }
+                            if (targetBody.length >= 50) break; // Stop if body is full
+                        }
+                    } while (addedMorePartsThisIteration && targetBody.length < 50 && remainingCapacityForAddons >= Math.min(...ratioOrder.map(p => BODYPART_COST[p])) ); // Continue if parts were added and can still afford cheapest part
+                }
+            }
         }
     }
 
-    // Step 5: Sort the final body for consistency (optional but good practice).
-    // Common Screeps sort order: TOUGH, defensive, WORK, CARRY, MOVE, offensive, CLAIM, HEAL.
-    // Simplified sort for common parts:
-    const partSortOrder: Record<BodyPartConstant, number> = {
-        [TOUGH]: 1, [WORK]: 2, [ATTACK]: 3, [RANGED_ATTACK]: 4,
-        [CARRY]: 5, [MOVE]: 6, [HEAL]: 7, [CLAIM]: 8
-    };
-    body.sort((a, b) => (partSortOrder[a] || 99) - (partSortOrder[b] || 99));
-
-    // Final check: if body is empty but fallback exists and is affordable, use fallback.
-    // This can happen if minEnergyForRatio was met, but due to 50-part limit or other constraints,
-    // the ratio-based body ended up empty.
-    if (body.length === 0 && cfg.fallbackBody && energy >= calculateCost(cfg.fallbackBody)) {
-        return cfg.fallbackBody;
+    // Scenario 3: If after the main logic, targetBody is still empty, but a fallback exists and is affordable
+    // This can happen if minEnergyForRatio was met, but other constraints (like 50-part limit for dontRepeatBody=false)
+    // resulted in an empty body, or if dontRepeatBody body was too expensive for current capacity.
+    if (targetBody.length === 0 && cfg.fallbackBody && cfg.fallbackBody.length > 0) {
+        if (roomEnergyCapacity >= calculateCost(cfg.fallbackBody)) {
+            targetBody = [...cfg.fallbackBody];
+        }
     }
 
-    return body;
+    // Scenario 4: Absolute minimal body for critical roles if still no body formed
+    if (targetBody.length === 0) {
+        let minimalBodyToTry: BodyPartConstant[] = [];
+        if (role === Role.Harvester) {
+            minimalBodyToTry = [WORK, CARRY, MOVE]; // Cost 200
+        } else if (role === Role.Miner) {
+            minimalBodyToTry = [WORK, WORK, MOVE]; // Cost 250
+        }
+        // Add other critical roles here if they need an absolute minimal fallback
+
+        if (minimalBodyToTry.length > 0 && roomEnergyCapacity >= calculateCost(minimalBodyToTry)) {
+            targetBody = minimalBodyToTry;
+        }
+    }
+
+    // Sort the final body for consistency (optional but good practice).
+    if (targetBody.length > 0) {
+        const partSortOrder: Record<BodyPartConstant, number> = {
+            [TOUGH]: 1, [WORK]: 2, [ATTACK]: 3, [RANGED_ATTACK]: 4,
+            [CARRY]: 5, [MOVE]: 6, [HEAL]: 7, [CLAIM]: 8
+        };
+        targetBody.sort((a, b) => (partSortOrder[a] || 99) - (partSortOrder[b] || 99));
+    }
+
+    return targetBody;
 }
 
 /**
@@ -152,7 +170,7 @@ export function getBodyForRole(role: Role, energy: number): BodyPartConstant[] {
  *
  * @param {BodyPartConstant[]} body - The array of body parts.
  * @returns {string} A string signature of the body (e.g., "2w1c1m").
- *                   Returns an empty string if the body is empty.
+ *                   Returns "empty" if the body is empty or undefined.
  */
 export function getBodySignature(body: BodyPartConstant[]): string {
     if (!body || body.length === 0) {

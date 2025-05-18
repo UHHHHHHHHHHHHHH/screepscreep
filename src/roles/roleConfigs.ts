@@ -24,18 +24,18 @@ export interface RoleConfig {
 
   /**
    * @property {number} minEnergyForRatio
-   * @description The minimum room energyAvailable required to attempt spawning this role
-   * using its `ratio` and potentially repeating it. If the room's energyAvailable
-   * is below this threshold, the `fallbackBody` will be used instead.
+   * @description The minimum *room energy capacity* (room.energyCapacityAvailable) generally
+   * advised to effectively build this role using its `ratio`.
+   * This helps `getBodyForRole` decide if the room is "developed enough" for the ideal body.
    */
   minEnergyForRatio: number;
 
   /**
    * @property {BodyPartConstant[]} [fallbackBody]
-   * @description An optional, fixed body definition to use if the `minEnergyForRatio`
-   * requirement is not met. If this is undefined and the energy is too low for the ratio,
-   * a very basic body (e.g., [WORK, CARRY, MOVE]) might be used by the body generation logic,
-   * or spawning might fail if the resulting body is empty.
+   * @description An optional, fixed body definition to use if the room's `energyCapacityAvailable`
+   * is considered too low for the main `ratio` (e.g., below `minEnergyForRatio`),
+   * or if the main ratio body is too large (e.g., for very early game).
+   * This body should be affordable with less energy.
    */
   fallbackBody?: BodyPartConstant[];
 
