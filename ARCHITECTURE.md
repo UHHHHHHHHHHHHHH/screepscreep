@@ -64,7 +64,7 @@ This Screeps AI is designed to manage an empire, focusing on efficient resource 
     │ ├── hauler.ts
     │ ├── miner.ts
     │ ├── roleBodies.ts # Body part definitions for roles
-    │ ├── roleConfigs.ts# Configurations for roles
+    │ ├── roleConfigs.ts # Configurations for roles
     │ └── upgrader.ts
     ├── types/ # TypeScript type definitions
     │ ├── memory.d.ts # Structure of the global Memory object
