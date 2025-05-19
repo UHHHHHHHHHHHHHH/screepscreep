@@ -62,7 +62,7 @@ export function handleIdle(creep: Creep): void {
             if (creep.pickup(droppedResourcePile) === ERR_NOT_IN_RANGE) {
                 creep.moveTo(droppedResourcePile, { visualizePathStyle: { stroke: '#ffaa00' }, range: 1 });
             }
-            creep.say("💰捡起"); // "Picking up"
+            creep.say("💰"); // "Picking up"
             return; // Task found
         }
     }
