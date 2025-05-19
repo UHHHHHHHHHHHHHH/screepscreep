@@ -49,13 +49,13 @@ export function calculateCost(parts: BodyPartConstant[]): number {
  *                               if no suitable body (even minimal fallback) can be defined
  *                               for the given `roomEnergyCapacity`.
  */
-export function getBodyForRole(role: Role, roomEnergyCapacity: number): BodyPartConstant[] {
+export function getBodyForRole(role: Role, energyForBodyConstruction: number, isEmergencyBuild: boolean = false): BodyPartConstant[] {
     const cfg = roleConfigs[role];
     if (!cfg) {
         console.log(`ERROR: No RoleConfig found for role: ${role}.`);
         // Return a very basic body if no config, assuming minimal capacity
         const defaultMinimalBody = [WORK, CARRY, MOVE];
-        return roomEnergyCapacity >= calculateCost(defaultMinimalBody) ? defaultMinimalBody : [];
+        return energyForBodyConstruction >= calculateCost(defaultMinimalBody) ? defaultMinimalBody : [];
     }
 
     // Create the "unit" of parts from the ratio for repeating, and its cost.
@@ -77,8 +77,8 @@ export function getBodyForRole(role: Role, roomEnergyCapacity: number): BodyPart
     let targetBody: BodyPartConstant[] = [];
 
     // Scenario 1: Room capacity is too low for the main ratio logic OR unitCost is invalid
-    if (roomEnergyCapacity < cfg.minEnergyForRatio || unitCost === 0) {
-        if (cfg.fallbackBody && cfg.fallbackBody.length > 0 && roomEnergyCapacity >= calculateCost(cfg.fallbackBody)) {
+    if (energyForBodyConstruction < cfg.minEnergyForRatio || unitCost === 0) {
+        if (cfg.fallbackBody && cfg.fallbackBody.length > 0 && energyForBodyConstruction >= calculateCost(cfg.fallbackBody)) {
             targetBody = [...cfg.fallbackBody];
         }
         // If no suitable fallback, targetBody remains empty for now, will be handled by final minimal check
@@ -88,13 +88,13 @@ export function getBodyForRole(role: Role, roomEnergyCapacity: number): BodyPart
         if (cfg.dontRepeatBody) {
             // For `dontRepeatBody`, 'unitParts' is the exact desired body.
             // It should be affordable if roomEnergyCapacity >= unitCost (which implies >= minEnergyForRatio here).
-            if (roomEnergyCapacity >= unitCost && unitParts.length > 0 && unitParts.length <= 50) {
+            if (energyForBodyConstruction >= unitCost && unitParts.length > 0 && unitParts.length <= 50) {
                 targetBody = [...unitParts];
             }
         } else {
             // Handle repeatable body ratios, building up to roomEnergyCapacity
             if (unitParts.length > 0) { // Ensure unit is valid
-                const numRepeatsPossibleWithCapacity = Math.floor(roomEnergyCapacity / unitCost);
+                const numRepeatsPossibleWithCapacity = Math.floor(energyForBodyConstruction / unitCost);
                 const maxTotalPartsFromUnits = unitParts.length > 0 ? Math.floor(50 / unitParts.length) : 0;
                 const actualRepeats = Math.min(numRepeatsPossibleWithCapacity, maxTotalPartsFromUnits);
 
@@ -106,7 +106,7 @@ export function getBodyForRole(role: Role, roomEnergyCapacity: number): BodyPart
 
                 // Try to use "leftover" room capacity to add more individual parts
                 let currentBodyCost = calculateCost(targetBody);
-                let remainingCapacityForAddons = roomEnergyCapacity - currentBodyCost;
+                let remainingCapacityForAddons = energyForBodyConstruction - currentBodyCost;
 
                 if (targetBody.length < 50 && remainingCapacityForAddons > 0) {
                     let addedMorePartsThisIteration: boolean;
@@ -131,7 +131,7 @@ export function getBodyForRole(role: Role, roomEnergyCapacity: number): BodyPart
     // This can happen if minEnergyForRatio was met, but other constraints (like 50-part limit for dontRepeatBody=false)
     // resulted in an empty body, or if dontRepeatBody body was too expensive for current capacity.
     if (targetBody.length === 0 && cfg.fallbackBody && cfg.fallbackBody.length > 0) {
-        if (roomEnergyCapacity >= calculateCost(cfg.fallbackBody)) {
+        if (energyForBodyConstruction >= calculateCost(cfg.fallbackBody)) {
             targetBody = [...cfg.fallbackBody];
         }
     }
@@ -146,7 +146,7 @@ export function getBodyForRole(role: Role, roomEnergyCapacity: number): BodyPart
         }
         // Add other critical roles here if they need an absolute minimal fallback
 
-        if (minimalBodyToTry.length > 0 && roomEnergyCapacity >= calculateCost(minimalBodyToTry)) {
+        if (minimalBodyToTry.length > 0 && energyForBodyConstruction >= calculateCost(minimalBodyToTry)) {
             targetBody = minimalBodyToTry;
         }
     }

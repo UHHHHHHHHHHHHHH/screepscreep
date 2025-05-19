@@ -1,6 +1,7 @@
 // src/managers/spawnManager.ts
 
 import { Role } from "../types/roles";
+import { RoleDemandMap, RoleDemandEntry } from "../types/memory";
 import { determineRoleDemand } from "./roleDemandManager";
 import { getBodyForRole, getBodySignature, calculateCost } from "../roles/roleBodies";
 import { getRoomPhase } from "./roomManager";
@@ -133,9 +134,10 @@ export function refreshSpawnQueue(room: Room): void {
         room.memory.spawnQueue = [];
     }
 
-    const demand = determineRoleDemand(room);
+    const demandMap: RoleDemandMap = determineRoleDemand(room);
     const currentCreepCounts = countCreepsByRole(room);
     const roomEnergyCapacity = room.energyCapacityAvailable;
+    const currentRoomEnergy = room.energyAvailable;
     const oldQueue = [...room.memory.spawnQueue]; // Operate on a copy
     let newQueue: SpawnRequest[] = [];
 
@@ -153,102 +155,100 @@ export function refreshSpawnQueue(room: Room): void {
     // --- Phase 1: Filter and keep relevant requests from the old queue ---
     for (const request of oldQueue) {
         const role = request.role;
-        const liveCountForRole = currentCreepCounts[role] || 0;
-        const demandForRole = demand[role] || 0;
+        const demandEntry = demandMap[role];
 
-        // Total "supply" for this role if we include this request and what's already committed to the new queue
-        const projectedSupplyIncludingThisRequest = liveCountForRole + effectiveQueuedCountsThisTick[role] + 1;
-
-        if (projectedSupplyIncludingThisRequest <= demandForRole) {
-            // This request is still needed to meet demand
-            newQueue.push(request);
-            effectiveQueuedCountsThisTick[role]++;
-        } else {
-             if (Game.time % 25 === 1) console.log(`[${room.name}] Pruning ${request.role} ${request.name} from spawn queue (demand met).`);
+        if (demandEntry && demandEntry.count > 0) {
+            const liveCountForRole = currentCreepCounts[role] || 0;
+            const currentEffectiveQueued = effectiveQueuedCountsThisTick[role] || 0;
+            if (liveCountForRole + currentEffectiveQueued < demandEntry.count) {
+                if (demandEntry.isEmergency && request.memory.role === Role.Harvester) {
+                    // maybe emergency stuff 
+                }
+                newQueue.push(request);
+                effectiveQueuedCountsThisTick[role]++;
+            }
         }
     }
 
-    // --- Phase 2: Add new requests for any remaining unmet demand ---
-    // Order of roles here determines the priority for *newly added* requests if multiple deficits exist.
-    const roleAppendPriority: Role[] = [Role.Miner, Role.Hauler, Role.Harvester, Role.Builder, Role.Upgrader];
 
-    for (const role of roleAppendPriority) {
+    // --- Phase 2: Add new requests for unmet demands ---
+    // Convert demandMap to an array and sort by priority (lower is higher)
+    const sortedDemandEntries = (Object.keys(demandMap) as Role[])
+        .map(role => ({ role, ...demandMap[role]! })) // Add role to entry for easier access
+        .filter(entry => entry.count > 0) // Only consider roles with positive demand count
+        .sort((a, b) => (a.priority || 99) - (b.priority || 99));
+
+    for (const demandEntry of sortedDemandEntries) {
+        const role = demandEntry.role;
         const liveCountForRole = currentCreepCounts[role] || 0;
-        const demandForRole = demand[role] || 0;
         const alreadyEffectivelyQueued = effectiveQueuedCountsThisTick[role] || 0;
-
-        let numToAddNew = demandForRole - liveCountForRole - alreadyEffectivelyQueued;
+        let numToAddNew = demandEntry.count - liveCountForRole - alreadyEffectivelyQueued;
 
         if (numToAddNew > 0) {
-            // Apply conditions for non-essential roles
-            if ((role === Role.Builder || role === Role.Upgrader) && !isEconomyStableEnoughForNonEssential(room)) {
-                if (Game.time % 20 === 4 && numToAddNew > 0) console.log(`[${room.name}] 🚫 Postponing new ${role}(s) (${numToAddNew}), economy not stable enough.`);
-                numToAddNew = 0; // Don't add new ones if economy is weak
-            }
+            // if (!demandEntry.isEmergency && (role === Role.Builder || role === Role.Upgrader) && !isEconomyStableEnoughForNonEssential(room)) {
+            //     if (Game.time % 20 === 8 && numToAddNew > 0) console.log(`[${room.name}] 🚫 Postponing new ${role}(s) (${numToAddNew}), economy not stable enough.`);
+            //     numToAddNew = 0;
+            // }
 
             for (let i = 0; i < numToAddNew; i++) {
-                if (newQueue.length >= 10) { // Safety: Max queue length
-                    console.log(`[${room.name}] Spawn queue reached limit (10). Halting further additions this tick.`);
-                    break; // Stop adding to newQueue
-                }
+                if (newQueue.length >= 10) break;
 
-                const targetBody = getBodyForRole(role, roomEnergyCapacity);
+                const energyForBody = demandEntry.maxCost || roomEnergyCapacity;
+                const isEmergency = demandEntry.isEmergency || false;
+                const targetBody = getBodyForRole(role, energyForBody, isEmergency);
+
                 if (targetBody.length === 0) {
-                    if (Game.time % 20 === 5) console.log(`[${room.name}] ⚠️ Cannot determine body for new ${role} (capacity ${roomEnergyCapacity}).`);
-                    continue; // Skip if no body can be formed
+                    if (Game.time % 10 === 1) console.log(`[${room.name}] ⚠️ Cannot form body for ${role} (Energy: ${energyForBody}, Emergency: ${isEmergency}). Demand: ${JSON.stringify(demandEntry)}`);
+                    continue;
                 }
 
                 const bodyCost = calculateCost(targetBody);
                 const bodySignature = getBodySignature(targetBody);
-                let nameAttempt = 0;
-                let name = '';
-                // Generate a unique name considering Game.creeps and newQueue
+                let name = ''; let nameAttempt = 0;
                 do {
-                    name = `${shortRoles[role] || role[0]}${bodySignature}_${(Game.time % 1000) + i + nameAttempt}`;
+                    name = `${shortRoles[role] || role[0]}${bodySignature}_${(isEmergency ? "EM_" : "")}${(Game.time % 1000) + i + nameAttempt}`;
                     nameAttempt++;
                 } while ((Game.creeps[name] || newQueue.some(req => req.name === name)) && nameAttempt < 10);
 
-                if (Game.creeps[name] || newQueue.some(req => req.name === name)) {
-                    console.log(`[${room.name}] Failed to generate unique name for ${role} after ${nameAttempt} attempts. Skipping.`);
-                    continue;
-                }
+                if (Game.creeps[name] || newQueue.some(req => req.name === name)) { /* ... log name fail ... */ continue; }
 
                 const initialMemory: CreepMemory = { role: role };
+                // if (isEmergency) initialMemory.isEmergencyCreep = true; // Optional: flag in creep memory
 
-                // Assign Source/Container IDs, passing `newQueue` for accurate counts
+                // Assign Source/Container IDs
                 if (role === Role.Miner || role === Role.Harvester) {
                     const maxPerSrc = role === Role.Miner ? 1 : (getRoomPhase(room) < 2.5 ? 2 : 1);
-                    // Pass `newQueue` which contains *kept old* and *newly added so far*
                     const targetSourceId = getAvailableSourceId(room, role, maxPerSrc, newQueue);
-                    if (targetSourceId) {
-                        initialMemory.sourceId = targetSourceId;
-                    } else if (role === Role.Miner) {
-                        if (Game.time % 5 === 2) console.log(`[${room.name}] No source slot for new Miner request. Not queuing.`);
-                        continue; // Critical for Miner: if no slot, don't queue
-                    }
+                    if (targetSourceId) initialMemory.sourceId = targetSourceId;
+                    else if (role === Role.Miner) { /* ... log no miner slot ... */ continue; }
                 } else if (role === Role.Hauler) {
                     const targetContainerId = getAvailableContainerId(room, newQueue);
-                    if (targetContainerId) {
-                        initialMemory.containerId = targetContainerId;
-                    }
+                    if (targetContainerId) initialMemory.containerId = targetContainerId;
                 }
 
-                const newSpawnRequest: SpawnRequest = {
+                // For emergency harvesters, add to front of queue. Others to back.
+                const spawnRequest: SpawnRequest = {
                     role: role, body: targetBody, name: name, memory: initialMemory,
                     timestamp: Game.time, cost: bodyCost
                 };
-                newQueue.push(newSpawnRequest);
-                effectiveQueuedCountsThisTick[role]++; // Update count for subsequent ID assignments in same tick
+
+                if (isEmergency) {
+                    newQueue.unshift(spawnRequest); // Emergency to the front
+                    console.log(`[${room.name}] EMERGENCY: Queued ${name} (Cost: ${bodyCost}) to front.`);
+                } else {
+                    newQueue.push(spawnRequest);
+                }
+                effectiveQueuedCountsThisTick[role] = (effectiveQueuedCountsThisTick[role] || 0) + 1;
             }
         }
-        if (newQueue.length >= 10) break; // Break from role loop if queue is full
+        if (newQueue.length >= 10) break;
     }
 
-    // Only update memory if the queue has actually changed to save CPU from serialization
+
     if (JSON.stringify(room.memory.spawnQueue) !== JSON.stringify(newQueue)) {
         room.memory.spawnQueue = newQueue;
-        if (Game.time % 10 === 7) {
-             console.log(`[${room.name}] ♻ Spawn Queue updated (${oldQueue.length} -> ${newQueue.length}): ${newQueue.map(r => r.role[0]).join('') || 'empty'}`);
+        if (Game.time % 10 === 9 || newQueue.some(r => r.name.includes("_EM_"))) {
+            console.log(`[${room.name}] ♻ Spawn Queue updated (${oldQueue.length} -> ${newQueue.length}): ${newQueue.map(r => r.role[0] + (r.name.includes("_EM_") ? "!" : "")).join('') || 'empty'}`);
         }
     }
 }
@@ -264,11 +264,11 @@ export function manageSpawns(spawn: StructureSpawn): void {
         // If spawn is busy, display spawning creep name and time left
         const spawningCreep = Game.creeps[spawn.spawning.name];
         if (spawningCreep) {
-             spawn.room.visual.text(
+            spawn.room.visual.text(
                 `🛠️ ${spawn.spawning.name} (${spawn.spawning.remainingTime})`,
                 spawn.pos.x + 1,
                 spawn.pos.y,
-                {align: 'left', opacity: 0.8, font: '0.7 Arial'}
+                { align: 'left', opacity: 0.8, font: '0.7 Arial' }
             );
         }
         return;
@@ -278,7 +278,7 @@ export function manageSpawns(spawn: StructureSpawn): void {
     // `refreshSpawnQueue` should ideally be called once per room per interval from main.ts.
     // Calling it here less frequently for now.
     if (Game.time % 3 === 1 && room.find(FIND_MY_SPAWNS)[0].id === spawn.id) { // Refresh only for the "first" spawn in room
-         refreshSpawnQueue(room);
+        refreshSpawnQueue(room);
     }
 
 
