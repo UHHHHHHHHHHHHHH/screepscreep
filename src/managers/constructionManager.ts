@@ -1,144 +1,245 @@
-import { planAndBuildRoads } from "./roadManager";
-import { getRoomPhase } from "./roomManager";
+/**
+ * @fileoverview Manages automated construction of structures within a room.
+ * It operates based on the room's current "phase" (derived from controller level and
+ * existing structures) to decide what to build next, such as extensions, containers
+ * near sources, and roads. Construction tasks are throttled by `CONSTRUCTION_INTERVAL`.
+ * @module managers/constructionManager
+ */
 
+import { planAndBuildRoads } from "./roadManager"; // For initiating road planning and building
+import { getRoomPhase } from "./roomManager";     // To determine the current construction priorities
+
+/**
+ * Interval (in game ticks) at which the `manageConstruction` function will execute its logic.
+ * This helps to distribute CPU load. For example, a value of 10 means construction logic
+ * runs for a room once every 10 ticks.
+ */
 const CONSTRUCTION_INTERVAL = 10;
 
-const extensionOffsets = [
-    [0, -2], [1, -1], [2, 0], [1, 1],
+/**
+ * Predefined relative offsets from a spawn to attempt placing extensions.
+ * This creates a somewhat circular or clustered pattern around the first spawn.
+ * Format: [dx, dy]
+ */
+const EXTENSION_OFFSETS: [number, number][] = [
+    [0, -2], [1, -1], [2, 0], [1, 1],  // Outer ring
     [0, 2], [-1, 1], [-2, 0], [-1, -1],
+    // Consider adding more layers or a more dynamic placement algorithm for higher RCLs
+    // e.g., [2, -2], [2, 2], [-2, 2], [-2, -2] // Corners
+    // [0, -3], [3, 0], [0, 3], [-3, 0] // Further out
 ];
 
+/**
+ * Relative offsets from a central point (like an energy source) to check for
+ * suitable locations to place structures like containers.
+ * These represent the 8 adjacent tiles.
+ * Format: [dx, dy]
+ */
+const ADJACENT_OFFSETS: [number, number][] = [
+    [-1, -1], [0, -1], [1, -1],
+    [-1, 0],           [1, 0], // Center tile (dx=0, dy=0) is excluded
+    [-1, 1], [0, 1], [1, 1],
+];
+
+/**
+ * Main function to manage construction tasks for a given room.
+ * It is throttled by `CONSTRUCTION_INTERVAL`.
+ * Based on the room's phase (determined by `getRoomPhase`), it delegates to
+ * specific construction functions like `buildExtensions`, `placeContainersNearSources`,
+ * or `planAndBuildRoads`.
+ *
+ * @param {Room} room - The room in which to manage construction.
+ * @returns {void}
+ */
 export function manageConstruction(room: Room): void {
-    if (Game.time % CONSTRUCTION_INTERVAL !== 0) return;
+    // Throttle execution to save CPU
+    if (Game.time % CONSTRUCTION_INTERVAL !== 0) {
+        return;
+    }
 
     const phase = getRoomPhase(room);
 
+    // Switch construction strategy based on room phase
     switch (phase) {
-        case 2:
+        case 2: // Early RCL2: Focus on initial extensions and containers for sources
             buildExtensions(room);
             placeContainersNearSources(room);
             break;
-        case 2.5:
+        case 2.5: // Mid RCL2: Basic structures likely up, focus on road network
             planAndBuildRoads(room);
             break;
-        case 3:
+        case 3: // RCL3: More extensions become available
             buildExtensions(room);
+            // Consider adding tower construction here
             break;
-        case 3.5: 
-            placeContainersNearSources(room);
-            buildExtensions(room);
-            planAndBuildRoads(room);
+        case 3.5: // Higher RCL or catch-all for ongoing development
+            // At this stage, it might be good to run all relevant construction checks,
+            // as needs can be diverse (more extensions, containers for new remotes, roads to new areas).
+            // Order might matter if one depends on another (e.g., roads to planned extension spots).
+            placeContainersNearSources(room); // Ensure all sources have containers
+            buildExtensions(room);            // Build any newly unlocked extensions
+            planAndBuildRoads(room);          // Continue building/maintaining road network
+            // Consider adding logic for other structures: towers, storage, terminal, labs, etc.
+            break;
+        // Add more cases for higher phases/RCLs with different priorities
+        default:
+            if (Game.time % (CONSTRUCTION_INTERVAL * 5) === 0) { // Log less frequently for unhandled phases
+                // console.log(`[${room.name}] ConstructionManager: No specific construction tasks for phase ${phase}.`);
+            }
+            break;
     }
 }
 
+/**
+ * Attempts to build extensions around the room's first spawn up to the maximum allowed
+ * by the controller level.
+ * It uses a predefined `EXTENSION_OFFSETS` pattern.
+ *
+ * @param {Room} room - The room in which to build extensions.
+ * @returns {void}
+ */
 function buildExtensions(room: Room): void {
     const controller = room.controller;
-    if (!controller || !controller.my || controller.level < 2) return;
+    // Requires a visible, owned controller at RCL 2 or higher.
+    if (!controller || !controller.my || controller.level < 2) {
+        return;
+    }
 
-    const maxExtensions = CONTROLLER_STRUCTURES.extension[controller.level];
-    const built = room.find(FIND_MY_STRUCTURES, {
+    const maxExtensionsAllowed = CONTROLLER_STRUCTURES.extension[controller.level];
+    if (maxExtensionsAllowed === 0) return; // No extensions available at this RCL (e.g. RCL 1)
+
+    const existingExtensions = room.find(FIND_MY_STRUCTURES, {
         filter: s => s.structureType === STRUCTURE_EXTENSION,
     }).length;
 
-    const queued = room.find(FIND_MY_CONSTRUCTION_SITES, {
+    const queuedExtensionSites = room.find(FIND_MY_CONSTRUCTION_SITES, {
         filter: s => s.structureType === STRUCTURE_EXTENSION,
     }).length;
 
-    const total = built + queued;
-    const missing = maxExtensions - total;
-    if (missing <= 0) return;
+    const totalExtensions = existingExtensions + queuedExtensionSites;
+    const missingExtensions = maxExtensionsAllowed - totalExtensions;
+
+    if (missingExtensions <= 0) {
+        return; // All allowed extensions are built or queued.
+    }
 
     const spawn = room.find(FIND_MY_SPAWNS)[0];
-    if (!spawn) return;
+    if (!spawn) {
+        // Should not happen if controller.my is true, but good safeguard.
+        return;
+    }
 
-    let placed = 0;
-    for (const [dx, dy] of extensionOffsets) {
-        if (placed >= missing) return;
-        const x = spawn.pos.x + dx;
-        const y = spawn.pos.y + dy;
+    let extensionsPlacedThisCall = 0;
+    for (const [dx, dy] of EXTENSION_OFFSETS) {
+        if (extensionsPlacedThisCall >= missingExtensions) {
+            break; // Stop if we've queued enough to meet the current RCL limit.
+        }
 
-        const blocked =
-            room.lookForAt(LOOK_STRUCTURES, x, y).length > 0 ||
-            room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length > 0;
+        const targetX = spawn.pos.x + dx;
+        const targetY = spawn.pos.y + dy;
 
-        if (!blocked) {
-            const result = room.createConstructionSite(x, y, STRUCTURE_EXTENSION);
-            if (result === OK) placed++;
+        // Basic boundary check (0-49)
+        if (targetX < 0 || targetX > 49 || targetY < 0 || targetY > 49) {
+            continue;
+        }
+
+        const pos = new RoomPosition(targetX, targetY, room.name);
+
+        // Check if the spot is blocked by existing structures or construction sites (of any type)
+        // or if it's a wall.
+        if (room.getTerrain().get(targetX, targetY) === TERRAIN_MASK_WALL ||
+            pos.lookFor(LOOK_STRUCTURES).length > 0 ||
+            pos.lookFor(LOOK_CONSTRUCTION_SITES).length > 0) {
+            continue; // Spot is blocked or a wall.
+        }
+
+        const result = room.createConstructionSite(targetX, targetY, STRUCTURE_EXTENSION);
+        if (result === OK) {
+            extensionsPlacedThisCall++;
+        } else if (Game.time % 50 === 0 && result !== ERR_FULL) { // Log errors other than "too many sites" periodically
+            console.log(`[${room.name}] Failed to place extension site at ${targetX},${targetY}: ${result}`);
         }
     }
 }
 
-const OFFSETS: [number, number][] = [
-    [-1, -1], [0, -1], [1, -1],
-    [-1, 0], [1, 0],
-    [-1, 1], [0, 1], [1, 1],
-];
-
+/**
+ * Places construction sites for containers near each energy source in the room.
+ * It attempts to find a free tile adjacent to the source that is closest to the spawn.
+ * It uses `room.memory.containerPositions` to remember where a container has been
+ * planned or built for a source, avoiding redundant placement.
+ * If a remembered container is missing, its memory entry is cleared.
+ *
+ * @param {Room} room - The room in which to place containers.
+ * @returns {void}
+ */
 export function placeContainersNearSources(room: Room): void {
     const spawn = room.find(FIND_MY_SPAWNS)[0];
-    if (!spawn) return;
+    if (!spawn) {
+        // A spawn is used for pathing reference; if none, can't optimally place.
+        return;
+    }
 
     if (!room.memory.containerPositions) {
         room.memory.containerPositions = {};
     }
 
-    for (const source of room.find(FIND_SOURCES)) {
-        // skip if we’ve already queued/placed one
-        const memPos = room.memory.containerPositions[source.id];
-        if (memPos) {
-            const hasContainer = room.lookForAt(LOOK_STRUCTURES, memPos.x, memPos.y)
+    const sources = room.find(FIND_SOURCES);
+    for (const source of sources) {
+        const memoryPosition = room.memory.containerPositions[source.id];
+        if (memoryPosition) {
+            const pos = new RoomPosition(memoryPosition.x, memoryPosition.y, room.name);
+            const hasExistingContainer = pos.lookFor(LOOK_STRUCTURES)
+                .some(s => s.structureType === STRUCTURE_CONTAINER);
+            const hasExistingSite = pos.lookFor(LOOK_CONSTRUCTION_SITES)
                 .some(s => s.structureType === STRUCTURE_CONTAINER);
 
-            const hasConstruction = room.lookForAt(LOOK_CONSTRUCTION_SITES, memPos.x, memPos.y)
-                .some(s => s.structureType === STRUCTURE_CONTAINER);
-
-            if (hasContainer || hasConstruction) {
-                continue; // ✅ Either a container exists OR one is being built, skip placing
+            if (hasExistingContainer || hasExistingSite) {
+                continue; // Container already exists or is being built at the remembered spot.
             } else {
+                // Container was remembered but is now missing. Clear memory to allow replanning.
                 delete room.memory.containerPositions[source.id];
-                console.log(`⚠️ Container for source ${source.id} missing, memory cleared`);
+                console.log(`[${room.name}] Container for source ${source.id} at (${memoryPosition.x},${memoryPosition.y}) is missing. Cleared memory, will replan.`);
             }
         }
+        // If we reach here, either no memory existed, or it was cleared. Time to find a spot.
+        // Log this attempt once to avoid spam if it fails repeatedly.
+        if (!memoryPosition && Game.time % (CONSTRUCTION_INTERVAL * 2) === 0) {
+             console.log(`[${room.name}] Looking for container spot for source ${source.id}.`);
+        }
 
-        console.log("no memory of this source having a container", source)
 
-        // build & filter only truly free adjacencies
-        const freeTiles = OFFSETS
+        // Find all adjacent, buildable, unoccupied tiles around the source.
+        const suitableTiles = ADJACENT_OFFSETS
             .map(([dx, dy]) => new RoomPosition(source.pos.x + dx, source.pos.y + dy, room.name))
             .filter(pos => {
-                // no walls
+                if (pos.x < 0 || pos.x > 49 || pos.y < 0 || pos.y > 49) return false; // Boundary check
                 if (room.getTerrain().get(pos.x, pos.y) === TERRAIN_MASK_WALL) return false;
-                // no existing structures or pending sites
-                if (pos.lookFor(LOOK_STRUCTURES).length > 0) return false;
+                if (pos.lookFor(LOOK_STRUCTURES).length > 0) return false; // Includes other containers
                 if (pos.lookFor(LOOK_CONSTRUCTION_SITES).length > 0) return false;
                 return true;
             });
 
-        if (freeTiles.length === 0) {
-            // nowhere to put it (all spots blocked)
-            continue;
+        if (suitableTiles.length === 0) {
+            if (Game.time % (CONSTRUCTION_INTERVAL * 5) === 0) { // Log periodically if no spot found
+                console.log(`[${room.name}] No suitable adjacent spot found for container near source ${source.id}.`);
+            }
+            continue; // No valid spot to place a container.
         }
 
-        // pick the free tile closest to spawn
-        freeTiles.sort((a, b) =>
-            spawn.pos.getRangeTo(a) - spawn.pos.getRangeTo(b)
+        // Sort suitable tiles by their path distance to the spawn to find the "most efficient" spot.
+        suitableTiles.sort((a, b) =>
+            spawn.pos.getRangeTo(a) - spawn.pos.getRangeTo(b) // Using getRangeTo for simplicity; PathFinder is more accurate but costlier
+            // Consider PathFinder.search(spawn.pos, {pos: a, range:1}).cost vs PathFinder.search(spawn.pos, {pos: b, range:1}).cost
         );
 
-        const target = freeTiles[0];
-        const res = room.createConstructionSite(
-            target.x,
-            target.y,
-            STRUCTURE_CONTAINER
-        );
+        const chosenPosition = suitableTiles[0];
+        const result = room.createConstructionSite(chosenPosition.x, chosenPosition.y, STRUCTURE_CONTAINER);
 
-        if (res === OK) {
-            room.memory.containerPositions[source.id] = { x: target.x, y: target.y };
-            console.log(
-                `✏️ Placed container for source ${source.id} at (${target.x},${target.y})`
-            );
-        } else {
-            // If it still somehow fails, you can log or handle retry logic here
-            console.log(`❌ Failed to place container at (${target.x},${target.y}): ${res}`);
+        if (result === OK) {
+            room.memory.containerPositions[source.id] = { x: chosenPosition.x, y: chosenPosition.y };
+            console.log(`[${room.name}] Placed container site for source ${source.id} at (${chosenPosition.x},${chosenPosition.y}).`);
+        } else if (Game.time % 50 === 0 && result !== ERR_FULL) {
+            console.log(`[${room.name}] Failed to place container site for source ${source.id} at (${chosenPosition.x},${chosenPosition.y}): ${result}`);
         }
     }
 }
