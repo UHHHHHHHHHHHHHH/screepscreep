@@ -179,7 +179,7 @@ export function determineRoleDemand(room: Room): RoleDemandMap {
         case 1:
             setDemand(Role.Harvester, idealEarlyGameHarvesters, { priority: 10 });
             if (sourcesAreFilledCheck(room)) {
-                setDemand(Role.Upgrader, 1, { priority: 50 });
+                setDemand(Role.Upgrader, 2, { priority: 50 });
             }
             break;
         case 2: // RCL2, introducing containers, extensions.
@@ -209,13 +209,13 @@ export function determineRoleDemand(room: Room): RoleDemandMap {
             }
             break;
         case 2.5:
-            setDemand(Role.Miner, sourceCount, { priority: 5 });
-            setDemand(Role.Hauler, sourceCount + (stats.energyInPiles > 1000 ? 1 : 0), { priority: 7 });
+            setDemand(Role.Miner, sourceCount, { priority: minerPriority });
+            setDemand(Role.Hauler, sourceCount + (stats.energyInPiles > 1000 ? 1 : 0), { priority: haulerPriority });
             if (sourcesAreFilledCheck(room) && constructionSitesCount > 0) {
-                setDemand(Role.Builder, Math.min(2, constructionSitesCount), { priority: 30 });
+                setDemand(Role.Builder, Math.min(2, constructionSitesCount), { priority: builderPriority });
             }
             if (sourcesAreFilledCheck(room) && constructionSitesCount === 0) {
-                setDemand(Role.Upgrader, Math.min(3, Math.floor(room.controller!.level * 1.5)), { priority: 50 });
+                setDemand(Role.Upgrader, Math.min(3, Math.floor(room.controller!.level * 1.5)), { priority: upgraderPriority });
             }
             break;
         default: // Phase 3+
