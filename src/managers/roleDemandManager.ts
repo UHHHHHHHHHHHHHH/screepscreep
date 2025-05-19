@@ -220,7 +220,7 @@ export function determineRoleDemand(room: Room): RoleDemandMap {
             break;
         default: // Phase 3+
             setDemand(Role.Miner, sourceCount, { priority: minerPriority });
-            setDemand(Role.Hauler, sourceCount + (stats.energyInPiles > 1000 ? 1 : 0), { priority: haulerPriority });
+            setDemand(Role.Hauler, sourceCount + (stats.energyInPiles > 10000 ? 1 : 0), { priority: haulerPriority });
             if (sourcesAreFilledCheck(room) && constructionSitesCount > 0) {
                 setDemand(Role.Builder, Math.min(3, Math.ceil(constructionSitesCount / 5)), { priority: builderPriority });
             }
