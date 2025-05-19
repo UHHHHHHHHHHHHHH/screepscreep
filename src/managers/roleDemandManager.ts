@@ -139,7 +139,7 @@ export function determineRoleDemand(room: Room): RoleDemandMap {
         // Set all other demands to 0 implicitly by only defining this one
         setDemand(Role.Harvester, 1, {
             isEmergency: true,
-            maxCost: Math.max(300, currentRoomEnergy), // Ensure at least 200, use current energy (minus buffer)
+            maxCost: Math.max(300, currentRoomEnergy), // Ensure at least 300, use current energy
             priority: 0 // Highest priority
         });
         return demandMap; // Return immediately with only emergency demand
@@ -147,6 +147,33 @@ export function determineRoleDemand(room: Room): RoleDemandMap {
 
     // --- Standard Phase-based Demands (assign priorities) ---
     const idealEarlyGameHarvesters = sourceCount * 2;
+
+        // --- Define base priorities (lower is higher) ---
+    let minerPriority = 5;
+    let haulerPriority = 7;
+    const harvesterPriority = 10;
+    const builderPriority = 30;
+    const upgraderPriority = 50;
+
+        // --- Dynamically adjust Miner/Hauler priorities ---
+    const currentMiners = currentCreepCounts[Role.Miner] || 0;
+    const currentHaulers = currentCreepCounts[Role.Hauler] || 0;
+
+    if (sourceCount > 0) { // Only adjust if there are sources to mine
+        if (currentMiners > currentHaulers) {
+            // More miners than haulers, prioritize haulers to catch up
+            haulerPriority = 4; // Make hauler higher priority than default miner
+            minerPriority = 6;  // Slightly deprioritize new miners
+            if (Game.time % 20 === 1) console.log(`[${room.name}] Prioritizing Haulers (M:${currentMiners} > H:${currentHaulers})`);
+        } else if (currentHaulers > currentMiners) {
+            // More haulers than miners, but we still need more miners.
+            // Keep miner priority high if we are below desired miner count.
+            minerPriority = 4;
+            haulerPriority = 6;
+            if (Game.time % 20 === 2) console.log(`[${room.name}] Prioritizing Miners (H:${currentHaulers} > M:${currentMiners}, but need M)`);
+        }
+        // If counts are equal, or if we need both, their default relative priorities (miner slightly higher) will apply.
+    }
 
     switch (phase) {
         case 1:
@@ -192,13 +219,13 @@ export function determineRoleDemand(room: Room): RoleDemandMap {
             }
             break;
         default: // Phase 3+
-            setDemand(Role.Miner, sourceCount, { priority: 5 });
-            setDemand(Role.Hauler, sourceCount + (stats.energyInPiles > 1000 ? 1 : 0), { priority: 7 });
+            setDemand(Role.Miner, sourceCount, { priority: minerPriority });
+            setDemand(Role.Hauler, sourceCount + (stats.energyInPiles > 1000 ? 1 : 0), { priority: haulerPriority });
             if (sourcesAreFilledCheck(room) && constructionSitesCount > 0) {
-                setDemand(Role.Builder, Math.min(3, Math.ceil(constructionSitesCount / 5)), { priority: 30 });
+                setDemand(Role.Builder, Math.min(3, Math.ceil(constructionSitesCount / 5)), { priority: builderPriority });
             }
             if (sourcesAreFilledCheck(room) && constructionSitesCount === 0) {
-                setDemand(Role.Upgrader, Math.min(6, Math.max(1, 8 - room.controller!.level)), { priority: 50 });
+                setDemand(Role.Upgrader, Math.min(6, Math.max(1, 8 - room.controller!.level)), { priority: upgraderPriority });
             }
             break;
     }
