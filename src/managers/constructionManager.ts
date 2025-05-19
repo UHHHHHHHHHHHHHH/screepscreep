@@ -24,6 +24,10 @@ export function manageConstruction(room: Room): void {
         case 3:
             buildExtensions(room);
             break;
+        case 3.5: 
+            placeContainersNearSources(room);
+            buildExtensions(room);
+            planAndBuildRoads(room);
     }
 }
 
