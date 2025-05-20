@@ -179,7 +179,7 @@ export abstract class BaseRole {
 
     protected assignSource(creep: Creep): Id<Source> | void {
         if (creep.memory.sourceId) {
-            return
+            return creep.memory.sourceId
         }
         // Need a fresh assignment
         const role = creep.memory.role;
