@@ -224,7 +224,7 @@ export function determineRoleDemand(room: Room): RoleDemandMap {
             if (sourcesAreFilledCheck(room) && constructionSitesCount > 0) {
                 setDemand(Role.Builder, Math.min(3, Math.ceil(constructionSitesCount / 5)), { priority: builderPriority });
             }
-            if (sourcesAreFilledCheck(room) && constructionSitesCount === 0) {
+            if (sourcesAreFilledCheck(room)) {
                 setDemand(Role.Upgrader, Math.min(6, Math.max(1, 8 - room.controller!.level)), { priority: upgraderPriority });
             }
             break;
