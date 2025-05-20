@@ -146,6 +146,10 @@ export function refreshSpawnQueue(room: Room): void {
         [Role.Miner]: 'mnr', [Role.Hauler]: 'hal'
     };
 
+    if (Game.time % 10 === 0) {
+        console.log("demand:", JSON.stringify(demandMap))
+    }
+
     // Track how many of each role we've decided to *keep* from the old queue or *add* as new.
     // This is used to ensure we don't over-queue when both pruning and adding.
     const effectiveQueuedCountsThisTick: Record<Role, number> = (Object.values(Role) as Role[]).reduce((acc, r) => {
