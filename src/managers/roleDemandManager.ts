@@ -11,6 +11,7 @@ import { Role } from "../types/roles";
 import { getRoomPhase } from "./roomManager";
 import { countCreepsByRole } from "./creepManager";
 import { getRoomResourceStats } from "./resourceManager";
+import { RoleDemandMap, RoleDemandEntry } from "../types/memory";
 
 /**
  * @interface RoleDemandConfig
@@ -41,7 +42,7 @@ export function isRoleDemandSatisfied(room: Room): boolean {
     const counts = countCreepsByRole(room);
 
     for (const role of allRoles) {
-        if (counts[role] < (demand[role] || 0)) { // Use (demand[role] || 0) in case a role has no demand defined
+        if (counts[role] < (demand[role]?.count || 0)) { // Use (demand[role] || 0) in case a role has no demand defined
             return false; // Found a role where current count is less than demand
         }
     }
@@ -59,7 +60,7 @@ export function isRoleDemandSatisfied(room: Room): boolean {
  * @param {Room} room - The room to check.
  * @returns {boolean} True if all sources are considered "filled" (i.e., being worked), false otherwise.
  */
-function sourcesAreFilled(room: Room): boolean {
+function sourcesAreFilledCheck(room: Room): boolean {
     const sources = room.find(FIND_SOURCES);
     if (sources.length === 0) {
         // If there are no sources, the condition of "all sources being filled" is vacuously true.
@@ -109,71 +110,94 @@ function zeroDemand(): RoleDemand {
     }, {} as RoleDemand); // Type assertion for initial empty object
 }
 
+
 /**
- * Determines the demand for each creep role in a given room.
- * This is the core logic for deciding how many creeps of each type are needed.
- * The demand is influenced by room phase, construction sites, energy sources,
- * resource levels, and any manual overrides.
- * It includes an emergency harvester demand if no energy income is detected and energy is critically low.
+ * Determines the detailed role demands for a room, including counts, and potential
+ * constraints like maxCost or emergency status for specific roles.
  *
  * @param {Room} room - The room for which to determine role demand.
- * @returns {RoleDemand} An object specifying the number of creeps needed for each role.
+ * @returns {RoleDemandMap} An object mapping roles to their detailed demand entries.
  */
-export function determineRoleDemand(room: Room): RoleDemand {
+export function determineRoleDemand(room: Room): RoleDemandMap {
     const phase = getRoomPhase(room);
     const currentCreepCounts = countCreepsByRole(room);
     const constructionSitesCount = room.find(FIND_CONSTRUCTION_SITES).length;
     const sources = room.find(FIND_SOURCES);
     const sourceCount = sources.length;
+    const stats = getRoomResourceStats(room);
+    const currentRoomEnergy = room.energyAvailable;
 
-    const baseDemand = zeroDemand(); // Start with all demands at 0
-    const stats = getRoomResourceStats(room); // For energyInPiles, etc.
+    const demandMap: RoleDemandMap = {};
 
-    // --- EMERGENCY Condition: No energy income and critically low available energy ---
-    // This overrides ALL other demand logic to prevent a complete stall.
-    // It demands a single, basic Harvester to try and kickstart the economy.
+    // Helper to add/update demand entry
+    function setDemand(role: Role, count: number, options?: Omit<RoleDemandEntry, 'count'>) {
+        if (count > 0) {
+            demandMap[role] = { count, ...options };
+        } else if (demandMap[role]) {
+            delete demandMap[role]; // Remove if count is 0
+        }
+    }
+
+    // --- EMERGENCY Condition ---
     const hasMiners = (currentCreepCounts[Role.Miner] || 0) > 0;
     const hasHarvesters = (currentCreepCounts[Role.Harvester] || 0) > 0;
-    // Critically low energy: less than what a basic Harvester (WCM = 200) costs.
-    const isEnergyCriticallyLow = room.energyAvailable < 550;
+    const isEnergyCriticallyLow = currentRoomEnergy < (5 * BODYPART_COST[WORK] + BODYPART_COST[MOVE] + 50); // ~600
 
     if (sourceCount > 0 && !hasMiners && !hasHarvesters && isEnergyCriticallyLow) {
-        console.log(`[${room.name}] EMERGENCY: No income generation and critically low energy (${room.energyAvailable}). Demanding 1 Harvester.`);
-        return {
-            ...baseDemand, // Ensure all other roles are 0
-            [Role.Harvester]: 1 // Demand exactly one emergency harvester
-        };
+        console.log(`[${room.name}] EMERGENCY: No income, low energy (${currentRoomEnergy}). Demanding 1 cheap Harvester.`);
+        // Set all other demands to 0 implicitly by only defining this one
+        setDemand(Role.Harvester, 1, {
+            isEmergency: true,
+            maxCost: Math.max(300, currentRoomEnergy), // Ensure at least 300, use current energy
+            priority: 0 // Highest priority
+        });
+        return demandMap; // Return immediately with only emergency demand
     }
-    // --- End of Emergency Condition ---
 
-    let demand: RoleDemand; // To be populated by phase-specific logic
-
-    // Ideal number of Harvesters in early game (Phase 1) is typically 2 per source.
+    // --- Standard Phase-based Demands (assign priorities) ---
     const idealEarlyGameHarvesters = sourceCount * 2;
 
-    // --- Define demand based on room phase ---
+        // --- Define base priorities (lower is higher) ---
+    let minerPriority = 5;
+    let haulerPriority = 7;
+    const harvesterPriority = 10;
+    const builderPriority = 30;
+    const upgraderPriority = 50;
+
+        // --- Dynamically adjust Miner/Hauler priorities ---
+    const currentMiners = currentCreepCounts[Role.Miner] || 0;
+    const currentHaulers = currentCreepCounts[Role.Hauler] || 0;
+
+    if (sourceCount > 0) { // Only adjust if there are sources to mine
+        if (currentMiners > currentHaulers) {
+            // More miners than haulers, prioritize haulers to catch up
+            haulerPriority = 4; // Make hauler higher priority than default miner
+            minerPriority = 6;  // Slightly deprioritize new miners
+            if (Game.time % 20 === 1) console.log(`[${room.name}] Prioritizing Haulers (M:${currentMiners} > H:${currentHaulers})`);
+        } else if (currentHaulers > currentMiners) {
+            // More haulers than miners, but we still need more miners.
+            // Keep miner priority high if we are below desired miner count.
+            minerPriority = 4;
+            haulerPriority = 6;
+            if (Game.time % 20 === 2) console.log(`[${room.name}] Prioritizing Miners (H:${currentHaulers} > M:${currentMiners}, but need M)`);
+        }
+        // If counts are equal, or if we need both, their default relative priorities (miner slightly higher) will apply.
+    }
+
     switch (phase) {
-        case 1: // Early game: Harvesters for income, one Upgrader if income is stable.
-            demand = {
-                ...baseDemand,
-                [Role.Harvester]: idealEarlyGameHarvesters,
-                [Role.Upgrader]: sourcesAreFilled(room) ? 1 : 0,
-            };
+        case 1:
+            setDemand(Role.Harvester, idealEarlyGameHarvesters, { priority: 10 });
+            if (sourcesAreFilledCheck(room)) {
+                setDemand(Role.Upgrader, 2, { priority: 50 });
+            }
             break;
-
-        case 2: // RCL2: Transition to container mining.
-                // Miners for sources with containers, Harvesters for those without.
-                // Haulers to move energy from containers. Builders for construction.
-            // const containers = room.find(FIND_STRUCTURES, { // This was used to get total count, not per source
-            //     filter: s => s.structureType === STRUCTURE_CONTAINER,
-            // }) as StructureContainer[];
-
+        case 2: // RCL2, introducing containers, extensions.
             let sourcesWithContainers = 0;
-            if (room.memory.containerPositions) {
+            // ... (logic to count sourcesWithContainers as before)
+             if (room.memory.containerPositions) {
                 for (const source of sources) {
                     if (room.memory.containerPositions[source.id]) {
                         const pos = room.memory.containerPositions[source.id];
-                        // Verify a container actually exists at the remembered position
                         const structuresAtPos = room.lookForAt(LOOK_STRUCTURES, pos.x, pos.y);
                         if (structuresAtPos.some(s => s.structureType === STRUCTURE_CONTAINER)) {
                             sourcesWithContainers++;
@@ -183,78 +207,68 @@ export function determineRoleDemand(room: Room): RoleDemand {
             }
             const sourcesWithoutContainers = sourceCount - sourcesWithContainers;
 
-            demand = {
-                ...baseDemand,
-                [Role.Miner]: sourcesWithContainers, // One miner per source that has an operational container.
-                // One hauler per active miner/container. Add an extra if significant energy piles exist.
-                [Role.Hauler]: sourcesWithContainers > 0 ? Math.max(1, sourcesWithContainers) + (stats.energyInPiles > 750 ? 1 : 0) : 0,
-                // Harvesters for sources that do NOT yet have a container (e.g., 2 per such source).
-                [Role.Harvester]: sourcesWithoutContainers * 2,
-                // Builders if sources are being worked and there are construction sites.
-                [Role.Builder]: sourcesAreFilled(room) && constructionSitesCount > 0 ? Math.min(2, constructionSitesCount) : 0,
-                // Upgrader if economy is somewhat stable (container mining started or good energy reserves) and no building.
-                [Role.Upgrader]: sourcesAreFilled(room) && constructionSitesCount === 0 &&
-                                (sourcesWithContainers > 0 || room.energyAvailable > room.energyCapacityAvailable * 0.5) ? 1 : 0,
-            };
+            setDemand(Role.Miner, sourcesWithContainers, { priority: 5 });
+            setDemand(Role.Hauler, sourcesWithContainers > 0 ? Math.max(1, sourcesWithContainers) + (stats.energyInPiles > 750 ? 1 : 0) : 0, { priority: 7 });
+            setDemand(Role.Harvester, sourcesWithoutContainers * 2, { priority: 10 });
+            if (sourcesAreFilledCheck(room) && constructionSitesCount > 0) {
+                setDemand(Role.Builder, Math.min(2, constructionSitesCount), { priority: 30 });
+            }
+            if (sourcesAreFilledCheck(room) && constructionSitesCount === 0 && (sourcesWithContainers > 0 || currentRoomEnergy > room.energyCapacityAvailable * 0.5)) {
+                setDemand(Role.Upgrader, 1, { priority: 50 });
+            }
             break;
-
-        case 2.5: // RCL2, post-basic infrastructure: Focus on Miners, Haulers, Upgraders, and Builders for roads/etc.
-            demand = {
-                ...baseDemand,
-                [Role.Miner]: sourceCount,
-                [Role.Hauler]: sourceCount + (stats.energyInPiles > 1000 ? 1 : 0), // More haulers if lots of dropped energy
-                [Role.Builder]: sourcesAreFilled(room) && constructionSitesCount > 0 ? Math.min(2, constructionSitesCount) : 0,
-                // More upgraders once core infrastructure is up and sources are filled.
-                [Role.Upgrader]: sourcesAreFilled(room) && constructionSitesCount === 0 ? Math.min(3, Math.floor(room.controller!.level * 1.5)) : 0,
-            };
+        case 2.5:
+            setDemand(Role.Miner, sourceCount, { priority: minerPriority });
+            setDemand(Role.Hauler, sourceCount + (stats.energyInPiles > 1000 ? 1 : 0), { priority: haulerPriority });
+            if (sourcesAreFilledCheck(room) && constructionSitesCount > 0) {
+                setDemand(Role.Builder, Math.min(2, constructionSitesCount), { priority: builderPriority });
+            }
+            if (sourcesAreFilledCheck(room) && constructionSitesCount === 0) {
+                setDemand(Role.Upgrader, Math.min(3, Math.floor(room.controller!.level * 1.5)), { priority: upgraderPriority });
+            }
             break;
-
-        default: // Phase 3+ (RCL3 and beyond): Mature room operations.
-            demand = {
-                ...baseDemand,
-                [Role.Miner]: sourceCount,
-                [Role.Hauler]: sourceCount + (stats.energyInPiles > 1000 ? 1 : 0),
-                // Builders needed if there are construction sites, scaled by number of sites (e.g., 1 builder per 5 sites).
-                [Role.Builder]: sourcesAreFilled(room) && constructionSitesCount > 0 ? Math.min(3, Math.ceil(constructionSitesCount / 5)) : 0,
-                // Upgraders: Number can be dynamic. Example: fewer at very high RCLs, more if controller needs leveling.
-                // This is a placeholder; sophisticated upgrader count would consider controller link, energy surplus etc.
-                [Role.Upgrader]: sourcesAreFilled(room) && constructionSitesCount === 0 ? Math.min(6, Math.max(1, 8 - room.controller!.level)) : 0,
-            };
+        default: // Phase 3+
+            setDemand(Role.Miner, sourceCount, { priority: minerPriority });
+            setDemand(Role.Hauler, sourceCount + (stats.energyInPiles > 10000 ? 1 : 0), { priority: haulerPriority });
+            if (sourcesAreFilledCheck(room) && constructionSitesCount > 0) {
+                setDemand(Role.Builder, Math.min(3, Math.ceil(constructionSitesCount / 5)), { priority: builderPriority });
+            }
+            if (sourcesAreFilledCheck(room)) {
+                setDemand(Role.Upgrader, Math.min(6, Math.max(1, 8 - room.controller!.level)), { priority: upgraderPriority });
+            }
             break;
     }
 
-    // --- Dynamic Adjustments (applied after phase-based demand) ---
-    // Example: If there's a lot of energy in piles, consider adding a temporary hauler
-    // if demand isn't already high from other logic.
-    if (stats.energyInPiles > 1000 && demand[Role.Hauler] < sourceCount + 1) { // Check if hauler demand is already accounting for piles
-        demand[Role.Hauler] = (demand[Role.Hauler] || 0) + 1;
-        demand[Role.Hauler] = Math.min(demand[Role.Hauler]!, sourceCount + 2); // Cap extra haulers for piles to avoid over-spawning
-    }
-
-    // Example: Reduce builder demand if room energy is very low and builders are present, to conserve energy.
-    // This prevents builders from draining energy needed for income generation if economy is struggling.
-    if (room.energyAvailable < room.energyCapacityAvailable * 0.3 &&
-        (currentCreepCounts[Role.Builder] || 0) > 0 &&
-        constructionSitesCount > 0 &&
-        demand[Role.Builder] > 0) { // Only reduce if there's a demand for builders already
-        demand[Role.Builder] = Math.max(0, (demand[Role.Builder] || 1) -1 ); // Reduce by one, but not below 0. Ensure it's at least 1 before reducing.
-    }
-
-
-    // Apply any manual overrides from room memory. These take final precedence.
-    const overrides = room.memory.roleDemandOverrides || {};
-    for (const role of allRoles) {
-        if (overrides[role] !== undefined && overrides[role] !== null) { // Check for null as well as undefined
-            demand[role] = overrides[role]!; // Non-null assertion due to the check
+    // --- Dynamic Adjustments (Example: reduce builder if energy low) ---
+    const builderDemandEntry = demandMap[Role.Builder];
+    if (builderDemandEntry && currentRoomEnergy < room.energyCapacityAvailable * 0.3 && (currentCreepCounts[Role.Builder] || 0) > 0) {
+        if (builderDemandEntry.count > 0) {
+            setDemand(Role.Builder, Math.max(0, builderDemandEntry.count -1), { priority: builderDemandEntry.priority });
         }
     }
 
-    if (Game.time % 10 === 0) {
-        console.log("Demand", JSON.stringify(demand))
+    // Apply console overrides (simple count overrides for now)
+    const overrides = room.memory.roleDemandOverrides || {};
+    for (const r of Object.keys(overrides) as Role[]) {
+        const overrideCount = overrides[r];
+        if (overrideCount !== undefined && overrideCount !== null) {
+            if (overrideCount > 0) {
+                // Preserve existing priority/maxCost if role was already in demandMap,
+                // otherwise use a default priority.
+                const existingEntry = demandMap[r];
+                setDemand(r, overrideCount, {
+                    priority: existingEntry?.priority || 99, // Keep existing or use low priority
+                    maxCost: existingEntry?.maxCost,
+                    isEmergency: existingEntry?.isEmergency
+                });
+            } else {
+                delete demandMap[r]; // Override to 0 means remove demand
+            }
+        }
     }
-
-    return demand;
+    return demandMap;
 }
+
 
 /**
  * Sets a manual override for the demand of a specific role in a room.

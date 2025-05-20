@@ -8,6 +8,40 @@
 import { RoomResourceStats } from "../managers/resourceManager";
 import { Role } from "./roles";
 
+
+/**
+ * @interface RoleDemandEntry
+ * @description Detailed demand for a specific role.
+ */
+export interface RoleDemandEntry {
+  /** @property {number} count - The number of creeps desired for this role. */
+  count: number;
+  /**
+   * @property {number} [maxCost] - Optional maximum energy cost for creeps of this role.
+   * If set, getBodyForRole should try to create a body within this cost.
+   * Typically used for emergency creeps based on current room.energyAvailable.
+   */
+  maxCost?: number;
+  /**
+   * @property {boolean} [isEmergency] - Optional flag indicating this is an emergency request.
+   * getBodyForRole might use this to prioritize minimal viable bodies.
+   */
+  isEmergency?: boolean;
+  /**
+   * @property {number} [priority] - Optional numerical priority for this demand.
+   * Lower numbers could mean higher priority when refreshSpawnQueue adds new items.
+   * (Example: 0 for emergency, 10 for miners, 20 for haulers, etc.)
+   */
+  priority?: number;
+}
+
+/**
+ * @type RoleDemandMap
+ * @description A map from Role to its detailed demand entry.
+ */
+export type RoleDemandMap = Partial<Record<Role, RoleDemandEntry>>;
+// Using Partial<> allows roles to be absent if their demand is zero.
+
 // Ensure this augmentation is correctly applied globally
 declare global {
   /**

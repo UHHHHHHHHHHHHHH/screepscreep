@@ -90,5 +90,6 @@ export const roleConfigs: Record<Role, RoleConfig> = {
     ratio: { carry: 6, move: 3 }, // Ratio implies 2 CARRY for every 1 MOVE
     minEnergyForRatio: 450, // Cost of 6C,3M = 300+150 = 450
     fallbackBody: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE], // Cost of 4C,2M = 200+100 = 300
+    dontRepeatBody: true
   },
 };
