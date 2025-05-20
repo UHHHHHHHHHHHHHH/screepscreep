@@ -46,15 +46,10 @@ export class MinerRole extends BaseRole {
      * @returns {boolean} True if all assignments are valid, false otherwise.
      */
     private hasValidAssignments(creep: Creep): boolean {
-        const sourceId = creep.memory.sourceId;
-        if (!sourceId) {
-            creep.say("❓NoSrcID");
-            console.log(`Miner ${creep.name} is missing sourceId.`);
-            return false;
-        }
+        const sourceId = this.assignSource(creep);
 
         const containerPositions = creep.room.memory.containerPositions;
-        if (!containerPositions || !containerPositions[sourceId]) {
+        if (!sourceId || !containerPositions || !containerPositions[sourceId]) {
             creep.say("❌NoSpot");
             console.log(`Miner ${creep.name} (source: ${sourceId}) is missing a designated containerPosition in room memory.`);
             return false;

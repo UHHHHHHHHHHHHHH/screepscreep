@@ -1,3 +1,4 @@
+import { findFreeSource } from "../managers/roomManager";
 import { Role } from "../types/roles";
 /**
  * @fileoverview Defines the abstract base class for all creep roles.
@@ -173,6 +174,21 @@ export abstract class BaseRole {
                  // Consider calling handleIdle(creep) for non-upgraders if they have energy but no delivery target
                  // handleIdle(creep);
             }
+        }
+    }
+
+    protected assignSource(creep: Creep): Id<Source> | void {
+        if (creep.memory.sourceId) {
+            return
+        }
+        // Need a fresh assignment
+        const role = creep.memory.role;
+        const src = findFreeSource(creep.room, role);
+        if (src) {
+            creep.memory.sourceId = src.id;
+            return src.id
+        } else {
+            creep.say("no src")
         }
     }
 }

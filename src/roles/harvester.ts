@@ -18,6 +18,7 @@ export class HarvesterRole extends BaseRole {
      */
     public run(creep: Creep): void {
         this.updateWorkingState(creep); // Manages creep.memory.atCapacity
+        this.assignSource(creep);
 
         if (creep.memory.atCapacity) {
             this.performDelivery(creep);

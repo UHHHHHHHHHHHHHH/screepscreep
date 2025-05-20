@@ -6,6 +6,7 @@
  * by other managers to tailor their logic (e.g., creep role demands, construction priorities).
  * @module managers/roomManager
  */
+import { Role } from "../types/roles";
 
 /**
  * Determines the current operational phase of a room based on its controller level (RCL)
@@ -88,3 +89,40 @@ export function getRoomPhase(room: Room): number {
   // For simplicity, defaulting to a higher phase number if logic is extended later.
   return level; // Or a specific "unknown/advanced" phase number like 99.
 }
+
+
+interface SrcCount { miners: number; harvesters: number; 
+
+}
+export function findFreeSource(
+    room: Room,
+    role: Role,
+    queued: SpawnRequest[] = []
+  ): Source | null {
+    const sources = room.find(FIND_SOURCES);
+    const count: Record<Id<Source>, SrcCount> =
+      Object.fromEntries(sources.map(s => [s.id, { miners: 0, harvesters: 0 }]));
+  
+    // helper
+    const add = (r: Role, id?: Id<Source>) => {
+      if (!id || !count[id]) return;
+      if (r === Role.Miner)      count[id].miners++;
+      else if (r === Role.Harvester) count[id].harvesters++;
+    };
+  
+    // live creeps
+    for (const c of Object.values(Game.creeps))
+      if (c.room.name === room.name) add(c.memory.role, c.memory.sourceId as Id<Source>);
+    // queued creeps
+    for (const q of queued) add(q.memory.role, q.memory.sourceId as Id<Source>);
+  
+    // crowding rule
+    const ok = (c: SrcCount, r: Role) =>
+      r === Role.Miner
+        ? c.miners === 0 && c.harvesters === 0          // miners want exclusivity
+        : r === Role.Harvester
+          ? c.miners === 0 && c.harvesters < 1          // max 1 harvester, no miners
+          : true;
+  
+    return sources.find(s => ok(count[s.id], role)) ?? null;
+  }
