@@ -13,6 +13,15 @@ import { countCreepsByRole } from "./creepManager";
 import { getRoomResourceStats } from "./resourceManager";
 
 /**
+ * @interface RoleDemandConfig
+ * @description Extends RoleDemand to include optional maxCost for body generation.
+ */
+export interface RoleDemandConfig {
+    count: number;
+    maxCostOverride?: number;
+}
+
+/**
  * @typedef {Record<Role, number>} RoleDemand
  * @description A record mapping each `Role` to the number of creeps desired for that role.
  */
